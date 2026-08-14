@@ -1,0 +1,2659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tripwire — Synthetic Media Detection</title>
+    <meta name="description" content="Tripwire checks whether audio, video, images, or text is human-made or AI-generated using open detection models. Four input types, one verdict.">
+    <meta property="og:title" content="Tripwire — Synthetic Media Detection">
+    <meta property="og:description" content="Run live mic audio, uploaded audio/video/images, or pasted text through open detection models to flag likely synthetic media.">
+    <meta property="og:type" content="website">
+    <meta name="theme-color" content="#0A0D10">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tripwire">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230A0D10'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%2300E5A0' stroke-width='2'/%3E%3Cline x1='16' y1='3' x2='16' y2='9' stroke='%2300E5A0' stroke-width='2'/%3E%3Cline x1='16' y1='23' x2='16' y2='29' stroke='%2300E5A0' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%2300E5A0'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root{
+            --bg:#0A0D10;
+            --panel:#11161B;
+            --panel-line:#1E262D;
+            --cyan:#00E5A0;
+            --cyan-dim:#00E5A033;
+            --red:#FF3B3B;
+            --red-dim:#FF3B3B33;
+            --amber:#FFB020;
+            --amber-dim:#FFB02033;
+            --text:#E7EDF0;
+            --text-dim:#6B7680;
+            --mono:'JetBrains Mono', monospace;
+            --display:'Big Shoulders Display', sans-serif;
+        }
+
+        *{ box-sizing:border-box; }
+        .hidden{ display:none !important; }
+
+        html,body{
+            margin:0;
+            min-height:100vh;
+            background:var(--bg);
+            color:var(--text);
+            font-family:var(--mono);
+        }
+
+        html{ scroll-behavior:smooth; }
+
+        body{
+            position:relative;
+            overflow-x:hidden;
+            padding:0 0 60px;
+            background-image:
+                linear-gradient(var(--panel-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--panel-line) 1px, transparent 1px);
+            background-size:42px 42px;
+            background-position:center top;
+        }
+
+        body::before{
+            content:"";
+            position:fixed;
+            inset:0;
+            pointer-events:none;
+            background:radial-gradient(ellipse at center, transparent 0%, var(--bg) 78%);
+            z-index:1;
+        }
+
+        body::after{
+            content:"";
+            position:fixed;
+            inset:0;
+            pointer-events:none;
+            background:repeating-linear-gradient(
+                to bottom,
+                rgba(255,255,255,0.018) 0px,
+                rgba(255,255,255,0.018) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            z-index:2;
+            opacity:.5;
+        }
+
+        #wavecanvas{
+            position:fixed;
+            inset:0;
+            width:100%;
+            height:100%;
+            z-index:0;
+            pointer-events:none;
+        }
+
+        @media (hover:hover) and (pointer:fine){
+            * { cursor:none !important; }
+            #reticle{
+                position:fixed;
+                top:0; left:0;
+                width:22px; height:22px;
+                margin:-11px 0 0 -11px;
+                border:1px solid var(--cyan);
+                border-radius:50%;
+                pointer-events:none;
+                z-index:9999;
+                transition:border-color .15s ease, width .15s ease, height .15s ease, margin .15s ease, opacity .15s ease;
+                opacity:.85;
+            }
+            #reticle::before,#reticle::after{
+                content:"";
+                position:absolute;
+                background:var(--cyan);
+                transition:background-color .15s ease;
+            }
+            #reticle::before{ left:50%; top:-6px; width:1px; height:5px; transform:translateX(-50%); }
+            #reticle::after{ left:-6px; top:50%; width:5px; height:1px; transform:translateY(-50%); }
+            #reticle-dot{
+                position:fixed;
+                top:0; left:0;
+                width:3px; height:3px;
+                margin:-1.5px 0 0 -1.5px;
+                background:var(--cyan);
+                border-radius:50%;
+                pointer-events:none;
+                z-index:9999;
+            }
+            #reticle.hot{
+                width:34px; height:34px;
+                margin:-17px 0 0 -17px;
+                border-color:var(--amber);
+                opacity:1;
+            }
+            #reticle.hot::before,#reticle.hot::after{ background:var(--amber); }
+        }
+
+        .site-header{
+            position:sticky;
+            top:0;
+            z-index:20;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:16px;
+            padding:16px 20px;
+            background:rgba(10,13,16,.82);
+            backdrop-filter:blur(10px);
+            -webkit-backdrop-filter:blur(10px);
+            border-bottom:1px solid var(--panel-line);
+        }
+        .brand{
+            display:flex; align-items:center; gap:9px;
+            font-family:var(--mono); font-weight:700; font-size:13px;
+            letter-spacing:.1em; color:var(--text); text-decoration:none;
+            white-space:nowrap;
+        }
+        .brand .dot{
+            width:7px; height:7px; border-radius:50%;
+            background:var(--cyan); box-shadow:0 0 8px var(--cyan);
+            animation:blink 1.6s ease-in-out infinite;
+            flex-shrink:0;
+        }
+        .site-nav{
+            display:flex; align-items:center; gap:22px;
+            font-size:11px; letter-spacing:.08em; color:var(--text-dim);
+        }
+        .site-nav a{
+            color:var(--text-dim); text-decoration:none;
+            transition:color .2s ease;
+            padding:4px 0;
+            border-bottom:1px solid transparent;
+        }
+        .site-nav a:hover{ color:var(--cyan); border-color:var(--cyan-dim); }
+        .nav-cta{
+            color:var(--cyan) !important;
+            border:1px solid var(--cyan);
+            padding:7px 12px !important;
+            text-transform:uppercase;
+            font-weight:600;
+        }
+        .nav-cta:hover{ background:var(--cyan-dim); }
+        .nav-launch{
+            display:flex; align-items:center; gap:6px;
+            color:var(--amber) !important;
+            border:1px solid var(--amber) !important;
+            padding:7px 12px !important;
+            text-transform:uppercase;
+            font-weight:600;
+        }
+        .nav-launch:hover{ background:var(--amber-dim); }
+        .nav-launch .dot{
+            width:6px; height:6px; border-radius:50%;
+            background:var(--amber); box-shadow:0 0 6px var(--amber);
+            animation:blink 1.6s ease-in-out infinite;
+        }
+        @media (max-width:640px){
+            .site-nav .nav-link{ display:none; }
+            .site-header{ padding:14px 16px; }
+        }
+
+        .page{ position:relative; z-index:3; padding:0 16px; }
+        .wide-section{
+            width:100%;
+            max-width:760px;
+            margin:0 auto;
+            padding:64px 0;
+            scroll-margin-top:76px;
+        }
+        .wide-section.tight{ padding-top:44px; padding-bottom:44px; }
+        .section-eyebrow{
+            font-size:11px; color:var(--amber); letter-spacing:.16em;
+            margin-bottom:10px; text-transform:uppercase;
+        }
+        .section-title{
+            font-family:var(--display); font-weight:900; text-transform:uppercase;
+            font-size:clamp(26px,5vw,36px); line-height:1; letter-spacing:-.01em;
+            margin:0 0 16px;
+        }
+        .section-lede{ color:var(--text-dim); font-size:13.5px; line-height:1.7; max-width:60ch; margin:0 0 30px; }
+
+        .hero-marketing{ max-width:720px; margin:0 auto; padding-top:56px; padding-bottom:36px; text-align:center; }
+        .hero-marketing h1{
+            font-family:var(--display); font-weight:900;
+            font-size:clamp(48px,11vw,84px); line-height:.9;
+            letter-spacing:-.01em; text-transform:uppercase; margin:0 0 16px;
+        }
+        .hero-marketing p{ color:var(--text-dim); font-size:14px; line-height:1.7; max-width:52ch; margin:0 auto 24px; }
+        .hero-badges{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:26px; justify-content:center; }
+        .hero-badges span{
+            font-size:10.5px; letter-spacing:.06em; color:var(--text-dim);
+            border:1px solid var(--panel-line); padding:6px 10px;
+        }
+        .hero-badges span b{ color:var(--cyan); font-weight:600; }
+        .hero-cta{
+            display:inline-flex; align-items:center; gap:8px;
+            background:var(--cyan); color:#06120D; text-decoration:none;
+            font-family:var(--mono); font-weight:700; font-size:12.5px;
+            letter-spacing:.08em; text-transform:uppercase;
+            padding:13px 20px; transition:box-shadow .2s ease, transform .15s ease;
+        }
+        .hero-cta:hover{ box-shadow:0 0 22px var(--cyan-dim); }
+        .hero-cta:active{ transform:scale(.98); }
+
+        .engine-grid{
+            display:grid; grid-template-columns:repeat(auto-fit, minmax(210px,1fr));
+            gap:1px; background:var(--panel-line); border:1px solid var(--panel-line);
+        }
+        .engine-card{ background:var(--panel); padding:20px; }
+        .engine-card .eng-tag{ font-size:10.5px; color:var(--cyan); letter-spacing:.1em; margin-bottom:10px; }
+        .engine-card h3{
+            font-family:var(--display); font-weight:900; text-transform:uppercase;
+            font-size:19px; margin:0 0 8px; letter-spacing:-.005em;
+        }
+        .engine-card p{ color:var(--text-dim); font-size:12.5px; line-height:1.65; margin:0 0 12px; }
+        .engine-card .eng-model{
+            font-size:10.5px; color:var(--text-dim); border-top:1px solid var(--panel-line);
+            padding-top:10px; word-break:break-word;
+        }
+        .engine-card .eng-model b{ color:var(--text); font-weight:500; }
+
+        .notice{
+            border:1px solid var(--amber-dim);
+            background:linear-gradient(180deg, rgba(255,176,32,.05), transparent 60%);
+            padding:22px 20px;
+            position:relative;
+        }
+        .notice::before{
+            content:"⚠ READ BEFORE YOU TRUST A VERDICT";
+            display:block;
+            font-size:10.5px; letter-spacing:.12em; color:var(--amber);
+            margin-bottom:14px;
+        }
+        .notice ul{ margin:0; padding-left:18px; color:var(--text-dim); font-size:12.5px; line-height:1.8; }
+        .notice li{ margin-bottom:6px; }
+        .notice li:last-child{ margin-bottom:0; }
+        .notice li b{ color:var(--text); font-weight:600; }
+
+        .faq-item{
+            border-bottom:1px solid var(--panel-line);
+        }
+        .faq-item summary{
+            list-style:none;
+            cursor:pointer;
+            display:flex; align-items:center; justify-content:space-between; gap:16px;
+            padding:18px 2px;
+            font-size:13px; color:var(--text);
+            font-weight:500;
+        }
+        .faq-item summary::-webkit-details-marker{ display:none; }
+        .faq-item summary::after{
+            content:"+";
+            font-family:var(--display); font-size:20px; color:var(--cyan);
+            flex-shrink:0; transition:transform .2s ease;
+        }
+        .faq-item[open] summary::after{ content:"–"; }
+        .faq-item p{
+            color:var(--text-dim); font-size:12.5px; line-height:1.75;
+            margin:0 0 18px; padding-right:32px;
+        }
+
+        .site-footer{
+            border-top:1px solid var(--panel-line);
+            margin-top:20px;
+            padding:40px 16px 30px;
+            position:relative; z-index:3;
+        }
+        .footer-inner{
+            max-width:760px; margin:0 auto;
+            display:flex; flex-wrap:wrap; gap:28px;
+            justify-content:space-between;
+            padding-bottom:22px;
+            border-bottom:1px solid var(--panel-line);
+        }
+        .footer-brand{ max-width:320px; }
+        .footer-brand .brand{ margin-bottom:10px; }
+        .footer-brand p{ color:var(--text-dim); font-size:12px; line-height:1.7; margin:0; }
+        .footer-col h4{
+            font-size:10.5px; letter-spacing:.1em; color:var(--text-dim);
+            text-transform:uppercase; margin:0 0 12px; font-weight:600;
+        }
+        .footer-col a{
+            display:block; color:var(--text-dim); text-decoration:none;
+            font-size:12.5px; margin-bottom:9px; transition:color .2s ease;
+        }
+        .footer-col a:hover{ color:var(--cyan); }
+        .footer-models{ font-size:11px; color:var(--text-dim); line-height:1.9; }
+        .footer-bottom{
+            max-width:760px; margin:18px auto 0;
+            display:flex; flex-wrap:wrap; gap:10px;
+            justify-content:space-between;
+            font-size:10.5px; color:var(--text-dim); letter-spacing:.04em;
+        }
+
+        .console{ position:relative; z-index:3; width:100%; max-width:560px; margin:0 auto; scroll-margin-top:76px; }
+
+        .statusbar{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            font-size:11px;
+            letter-spacing:.08em;
+            color:var(--text-dim);
+            padding-bottom:10px;
+            opacity:0;
+            animation:fadeIn .5s ease .1s forwards;
+        }
+        .statusbar .dot{
+            display:inline-block;
+            width:7px; height:7px;
+            border-radius:50%;
+            background:var(--cyan);
+            margin-right:7px;
+            box-shadow:0 0 8px var(--cyan);
+            animation:blink 1.6s ease-in-out infinite;
+        }
+        .statusbar .left{ display:flex; align-items:center; color:var(--cyan); }
+        .history-btn{
+            background:none;
+            border:1px solid var(--panel-line);
+            color:var(--text-dim);
+            font-family:var(--mono);
+            font-size:10px;
+            letter-spacing:.08em;
+            padding:4px 9px;
+            cursor:pointer;
+            transition:border-color .2s ease, color .2s ease;
+        }
+        .history-btn:hover{ border-color:var(--cyan); color:var(--cyan); }
+
+        .toast-container{
+            position:fixed;
+            top:16px;
+            right:16px;
+            z-index:999;
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            max-width:320px;
+        }
+        .toast{
+            background:var(--panel);
+            border:1px solid var(--panel-line);
+            border-left:3px solid var(--cyan);
+            color:var(--text);
+            font-family:var(--mono);
+            font-size:12px;
+            line-height:1.4;
+            padding:12px 14px;
+            box-shadow:0 4px 20px rgba(0,0,0,.45);
+            animation:toastIn .25s ease;
+        }
+        .toast.error{ border-left-color:var(--red); }
+        .toast.success{ border-left-color:var(--cyan); }
+        .toast.leaving{ animation:toastOut .2s ease forwards; }
+
+        .modal-overlay{
+            position:fixed; inset:0;
+            background:rgba(6,10,8,.75);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            z-index:998;
+            padding:20px;
+        }
+        .modal-box{
+            width:100%;
+            max-width:440px;
+            max-height:80vh;
+            background:var(--panel);
+            border:1px solid var(--panel-line);
+            box-shadow:0 0 30px rgba(0,0,0,.5);
+            display:flex;
+            flex-direction:column;
+        }
+        .modal-header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:14px 16px;
+            border-bottom:1px solid var(--panel-line);
+            font-size:12px;
+            letter-spacing:.08em;
+            color:var(--cyan);
+        }
+        .modal-close{
+            background:none; border:none;
+            color:var(--text-dim);
+            font-size:14px;
+            cursor:pointer;
+        }
+        .modal-close:hover{ color:var(--red); }
+        .modal-list{
+            overflow-y:auto;
+            padding:6px 0;
+        }
+        .history-item{
+            padding:10px 16px;
+            border-bottom:1px solid var(--panel-line);
+            cursor:pointer;
+            font-family:var(--mono);
+            font-size:11px;
+            transition:background .15s ease;
+        }
+        .history-item:hover{ background:rgba(255,255,255,.03); }
+        .history-item-top{
+            display:flex;
+            justify-content:space-between;
+            gap:8px;
+            color:var(--text);
+        }
+        .history-item.red .history-item-top{ color:var(--red); }
+        .history-item.green .history-item-top{ color:var(--cyan); }
+        .history-item-time{
+            color:var(--text-dim);
+            margin-top:3px;
+            font-size:10px;
+        }
+        .hint-btn{
+            margin:10px 16px 14px;
+            background:none;
+            border:1px solid var(--panel-line);
+            color:var(--text-dim);
+            font-family:var(--mono);
+            font-size:10.5px;
+            letter-spacing:.05em;
+            padding:8px 12px;
+            cursor:pointer;
+        }
+        .hint-btn:hover{ border-color:var(--red); color:var(--red); }
+
+        #resultActions{
+            display:flex;
+            flex-wrap:wrap;
+            gap:8px;
+            margin-top:16px;
+        }
+        .export-btn{
+            flex:1;
+            min-width:110px;
+            background:none;
+            border:1px solid var(--panel-line);
+            color:var(--text-dim);
+            font-family:var(--mono);
+            font-size:11px;
+            letter-spacing:.06em;
+            padding:10px 12px;
+            cursor:pointer;
+            transition:border-color .2s ease, color .2s ease;
+        }
+        .export-btn:hover{ border-color:var(--cyan); color:var(--cyan); }
+
+        /* Confidence Breakdown Meters */
+        .breakdown-container {
+            margin-top: 14px;
+            border-top: 1px solid var(--panel-line);
+            padding-top: 12px;
+        }
+        .breakdown-title {
+            font-size: 10.5px;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        .breakdown-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 6px;
+            gap: 10px;
+        }
+        .breakdown-label { color: var(--text-dim); flex-shrink: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; }
+        .breakdown-track { flex: 1; height: 5px; background: var(--panel-line); position: relative; overflow: hidden; }
+        .breakdown-fill { height: 100%; background: var(--cyan); width: 0%; transition: width 0.6s cubic-bezier(.65,0,.35,1); }
+        .breakdown-fill.alarm { background: var(--red); }
+        .breakdown-val { color: var(--text); font-weight: 500; flex-shrink: 0; }
+
+        /* Shared panel wrapper for the new result-box features */
+        .feature-panel{
+            margin-top:14px;
+            border-top:1px solid var(--panel-line);
+            padding-top:12px;
+        }
+
+        /* Confidence Gauge */
+        .gauge-wrap{ display:flex; flex-direction:column; align-items:center; margin:6px 0 4px; }
+        .gauge-svg{ width:200px; max-width:70%; height:auto; }
+        .gauge-value{ font-family:var(--mono); font-size:26px; font-weight:700; fill:var(--text); }
+        #gaugeArc{ transition: stroke-dashoffset 0.9s cubic-bezier(.65,0,.35,1), stroke 0.4s ease; }
+        .gauge-label{ font-size:10px; letter-spacing:.15em; color:var(--text-dim); margin-top:-6px; }
+
+        /* Heatmap */
+        .heatmap-stage{ position:relative; width:100%; max-width:420px; margin:0 auto; border:1px solid var(--panel-line); overflow:hidden; }
+        .heatmap-img{ display:block; width:100%; height:auto; }
+        .heatmap-overlay-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; opacity:0.72; mix-blend-mode:screen; transition:opacity .2s ease; }
+        .heatmap-toggle{ display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-dim); margin-top:8px; cursor:pointer; }
+        .heatmap-toggle input{ accent-color:var(--cyan); }
+
+        /* Multi-face grid */
+        .faces-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; }
+        .face-card{ border:1px solid var(--panel-line); padding:6px; text-align:center; font-size:10.5px; }
+        .face-card.red{ border-color:var(--red); }
+        .face-card.green{ border-color:var(--cyan); }
+        .face-card .face-verdict{ font-weight:700; margin-top:4px; }
+        .face-card.red .face-verdict{ color:var(--red); }
+        .face-card.green .face-verdict{ color:var(--cyan); }
+        .face-card .face-box{ color:var(--text-dim); font-size:9.5px; }
+
+        /* Timeline */
+        .timeline-svg{ width:100%; height:100px; display:block; }
+        .timeline-legend{ display:flex; gap:16px; font-size:10px; color:var(--text-dim); margin-top:6px; }
+        .timeline-legend .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
+
+        /* Spectrogram */
+        .spectrogram-canvas{ width:100%; height:auto; background:#05070a; border:1px solid var(--panel-line); display:block; }
+
+        /* Provenance */
+        .provenance-list{ list-style:none; margin:0; padding:0; font-size:11.5px; color:var(--text); }
+        .provenance-list li{ padding:5px 0; border-top:1px solid var(--panel-line); }
+        .provenance-list li:first-child{ border-top:none; }
+
+        /* Share link */
+        #shareLinkBox{ display:flex; gap:8px; margin-top:10px; }
+        #shareLinkBox.hidden{ display:none; }
+        #shareLinkInput{
+            flex:1; background:var(--panel); border:1px solid var(--panel-line); color:var(--text);
+            font-family:var(--mono); font-size:11px; padding:8px 10px; border-radius:4px;
+        }
+
+        /* Recording Timer Badge */
+        .rec-timer {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid var(--red);
+            color: var(--red);
+            font-size: 10.5px;
+            padding: 3px 8px;
+            letter-spacing: 0.1em;
+            z-index: 15;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .rec-timer .dot-pulse {
+            width: 6px; height: 6px; background: var(--red); border-radius: 50%;
+            animation: blink 1s ease-in-out infinite;
+        }
+
+        .beam-track{
+            position:relative;
+            height:2px;
+            width:100%;
+            background:var(--panel-line);
+            margin-bottom:34px;
+            overflow:hidden;
+        }
+        .beam-fill{
+            position:absolute; inset:0;
+            background:var(--cyan);
+            transform-origin:left center;
+            transform:scaleX(0);
+            animation:drawBeam 1.1s cubic-bezier(.65,0,.35,1) .3s forwards;
+            box-shadow:0 0 10px var(--cyan);
+        }
+        .beam-fill.alarm{ background:var(--red); box-shadow:0 0 10px var(--red); }
+        .beam-sweep{
+            position:absolute;
+            top:0; left:-20%;
+            width:20%; height:100%;
+            background:linear-gradient(90deg, transparent, rgba(255,255,255,.9), transparent);
+            animation:sweep 2.8s linear infinite;
+            animation-delay:1.4s;
+        }
+
+        .hero{ margin-bottom:30px; opacity:0; animation:riseIn .6s ease .5s forwards; }
+        .hero .eyebrow{
+            font-size:11px; color:var(--amber); letter-spacing:.16em; margin-bottom:6px;
+        }
+        .hero h1{
+            font-family:var(--display);
+            font-weight:900;
+            font-size:clamp(42px,10vw,64px);
+            line-height:.88;
+            letter-spacing:-.01em;
+            text-transform:uppercase;
+            margin:0 0 12px;
+        }
+        .hero p{ color:var(--text-dim); font-size:13.5px; line-height:1.6; max-width:46ch; margin:0; }
+
+        .console{ max-width:680px; }
+
+        .workspace{
+            display:flex;
+            align-items:flex-start;
+            gap:16px;
+            opacity:0;
+            animation:riseIn .6s ease .65s forwards;
+        }
+
+        .sidebar{
+            display:flex;
+            flex-direction:column;
+            gap:2px;
+            width:168px;
+            flex-shrink:0;
+        }
+        .nav-item{
+            display:flex;
+            align-items:center;
+            gap:11px;
+            background:var(--panel);
+            border:1px solid var(--panel-line);
+            border-left:3px solid transparent;
+            color:var(--text-dim);
+            font-family:var(--mono);
+            padding:12px 12px;
+            text-align:left;
+            transition:color .2s ease, background-color .2s ease, border-color .2s ease;
+        }
+        .nav-item .icon{ width:18px; height:18px; flex-shrink:0; stroke:currentColor; }
+        .nav-item .label{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+        .nav-item .label .name{ font-size:12px; letter-spacing:.06em; white-space:nowrap; }
+        .nav-item:hover{ color:var(--text); }
+        .nav-item.active{
+            color:var(--cyan);
+            border-left-color:var(--cyan);
+            background:rgba(0,229,160,.05);
+            box-shadow: inset 0 0 0 1px rgba(0,229,160,.12);
+        }
+
+        /* Micro-Glitch UI Elements */
+        .nav-item:hover, button[type="submit"]:hover {
+            animation: microGlitch 0.25s cubic-bezier(.25, .46, .45, .94) both infinite;
+        }
+
+        .sensor-panel-wrap{
+            position:relative;
+            flex:1;
+            min-width:0;
+        }
+        .sensor{
+            position:relative;
+            background:var(--panel);
+            border:1px solid var(--panel-line);
+            padding:22px 20px;
+            margin-bottom:18px;
+            display:none;
+            animation:panelFade .35s ease;
+        }
+        .sensor.active-panel{ display:block; }
+
+        .sensor .corner{ position:absolute; width:14px; height:14px; border-color:var(--cyan); transition:border-color .3s ease; }
+        .sensor .corner.tl{ top:-1px; left:-1px; border-top:2px solid; border-left:2px solid; }
+        .sensor .corner.tr{ top:-1px; right:-1px; border-top:2px solid; border-right:2px solid; }
+        .sensor .corner.bl{ bottom:-1px; left:-1px; border-bottom:2px solid; border-left:2px solid; }
+        .sensor .corner.br{ bottom:-1px; right:-1px; border-bottom:2px solid; border-right:2px solid; }
+
+        .sensor-label{
+            display:flex; align-items:center; justify-content:space-between;
+            font-size:11px; letter-spacing:.1em; color:var(--text-dim); margin-bottom:16px;
+        }
+        .sensor-label .tag{ color:var(--cyan); }
+
+        .method-toggle{
+            display:flex;
+            gap:2px;
+            margin-bottom:16px;
+        }
+        .method-btn{
+            flex:1;
+            background:transparent;
+            border:1px solid var(--panel-line);
+            color:var(--text-dim);
+            font-family:var(--mono);
+            font-size:10.5px;
+            font-weight:600;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+            padding:8px 10px;
+            transition:color .2s ease, border-color .2s ease, background-color .2s ease;
+        }
+        .method-btn:hover{ color:var(--text); }
+        .method-btn.active{
+            color:var(--cyan);
+            border-color:var(--cyan);
+            background:rgba(0,229,160,.06);
+        }
+        .method-body{ display:none; }
+        .method-body.active-method{ display:block; animation:panelFade .3s ease; }
+
+        .camera-frame{
+            position:relative;
+            width:100%;
+            aspect-ratio:4/3;
+            background:#000;
+            border:1px solid var(--panel-line);
+            margin-bottom:14px;
+            overflow:hidden;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+        }
+        .camera-frame video{
+            width:100%;
+            height:100%;
+            object-fit:cover;
+            display:block;
+        }
+        .camera-placeholder{
+            position:absolute;
+            font-size:11px;
+            color:var(--text-dim);
+            letter-spacing:.06em;
+            text-transform:uppercase;
+        }
+        .camera-frame video[srcObject]{ display:block; }
+
+        /* Scanner Overlay for Camera Frames */
+        .scanner-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(rgba(0, 229, 160, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 229, 160, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+        .scanner-overlay.active { opacity: 1; }
+        .scanner-overlay::after {
+            content: "";
+            position: absolute;
+            top: -10%; left: 0; right: 0; height: 10%;
+            background: linear-gradient(to bottom, transparent, rgba(0, 229, 160, 0.8));
+            box-shadow: 0 5px 15px rgba(0, 229, 160, 0.5);
+            animation: scanSweep 2s linear infinite;
+        }
+
+        #recordBtn, #videoCameraBtn, #imageCameraBtn{
+            position:relative;
+            display:flex; align-items:center; justify-content:center; gap:8px;
+            width:100%;
+            padding:13px 18px;
+            background:transparent;
+            border:1px solid var(--red);
+            color:var(--red);
+            font-family:var(--mono);
+            font-weight:600;
+            font-size:13px;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+            transition:background-color .2s ease, color .2s ease;
+        }
+        #recordBtn:hover, #videoCameraBtn:hover, #imageCameraBtn:hover{ background:var(--red-dim); }
+        #recordBtn.armed, #videoCameraBtn.armed, #imageCameraBtn.armed{ border-color:var(--amber); color:var(--amber); background:var(--amber-dim); }
+        #recordBtn.ready, #videoCameraBtn.ready, #imageCameraBtn.ready{ border-color:var(--cyan); color:var(--cyan); }
+        #recordBtn .ring, #videoCameraBtn .ring{
+            position:absolute; inset:0;
+            border:1px solid var(--red);
+            opacity:0;
+        }
+        #recordBtn.armed .ring, #videoCameraBtn.armed .ring{ animation:pulseRing 1.6s ease-out infinite; }
+
+        #recordStatus{ font-size:11px; color:var(--text-dim); text-align:center; margin-top:10px; }
+
+        .dropzone{
+            border:1px dashed var(--panel-line);
+            padding:26px 16px;
+            text-align:center;
+            transition:border-color .2s ease, background-color .2s ease;
+        }
+        .dropzone:hover, .dropzone.drag{ border-color:var(--cyan); background:rgba(0,229,160,.04); }
+        .dropzone input[type=file]{
+            font-family:var(--mono);
+            font-size:12px;
+            color:var(--text-dim);
+            width:100%;
+        }
+        .dropzone input[type=file]::file-selector-button{
+            font-family:var(--mono);
+            font-weight:600;
+            letter-spacing:.05em;
+            text-transform:uppercase;
+            font-size:11px;
+            background:transparent;
+            color:var(--cyan);
+            border:1px solid var(--cyan);
+            padding:8px 14px;
+            margin-right:12px;
+            transition:background-color .2s ease;
+        }
+        .dropzone input[type=file]::file-selector-button:hover{ background:var(--cyan-dim); }
+
+        #textInput{
+            width:100%;
+            background:#0A0D10;
+            border:1px solid var(--panel-line);
+            color:var(--text);
+            font-family:var(--mono);
+            font-size:12.5px;
+            line-height:1.6;
+            padding:14px;
+            resize:vertical;
+            transition:border-color .2s ease;
+        }
+        #textInput:focus{ outline:none; border-color:var(--cyan); }
+        #textInput::placeholder{ color:var(--text-dim); }
+
+        .hint{
+            font-size:10.5px;
+            color:var(--text-dim);
+            letter-spacing:.03em;
+            margin:8px 0 0;
+        }
+
+        button[type="submit"]{
+            width:100%;
+            margin-top:14px;
+            padding:14px 18px;
+            background:var(--cyan);
+            color:#06120D;
+            border:none;
+            font-family:var(--mono);
+            font-weight:700;
+            font-size:13px;
+            letter-spacing:.1em;
+            text-transform:uppercase;
+            transition:transform .15s ease, box-shadow .2s ease;
+        }
+        button[type="submit"]:hover{ box-shadow:0 0 22px var(--cyan-dim); }
+        button[type="submit"]:active{ transform:scale(.98); }
+
+        #loading{
+            font-size:12px;
+            color:var(--amber);
+            letter-spacing:.05em;
+            padding:14px 0 4px;
+        }
+        #loading .line{ opacity:.3; transition:opacity .25s ease; }
+        #loading .line.active{ opacity:1; }
+        #loading .cursor-blink{ animation:blink 1s step-end infinite; }
+
+        #uploadProgress{
+            font-size:12px;
+            color:var(--cyan);
+            letter-spacing:.05em;
+            padding:14px 0 4px;
+        }
+        #uploadProgress .bar-track{
+            width:100%;
+            height:4px;
+            background:var(--panel-line);
+            margin-top:8px;
+            overflow:hidden;
+        }
+        #uploadProgress .bar-fill{
+            height:100%;
+            width:0%;
+            background:var(--cyan);
+            box-shadow:0 0 8px var(--cyan-dim);
+            transition:width .12s linear;
+        }
+
+        #resultBox{
+            margin-top:22px;
+            padding:20px;
+            background:var(--panel);
+            border:1px solid var(--panel-line);
+            position:relative;
+        }
+        #resultBox.armed-red{ border-color:var(--red); animation:trip .4s ease; box-shadow:0 0 26px var(--red-dim); }
+        #resultBox.armed-green{ border-color:var(--cyan); box-shadow:0 0 26px var(--cyan-dim); }
+
+        #resultMessage{
+            font-family:var(--display);
+            font-weight:900;
+            text-transform:uppercase;
+            font-size:22px;
+            letter-spacing:-.01em;
+            margin:0 0 12px;
+        }
+        #resultBox.armed-red #resultMessage{ 
+            color:var(--red); 
+            animation: glitch 0.2s cubic-bezier(.25, .46, .45, .94) both infinite;
+            text-shadow: 2px 0px var(--cyan), -2px 0px var(--amber);
+        }
+        #resultBox.armed-green #resultMessage{ color:var(--cyan); }
+
+        #resultRaw{
+            font-family:var(--mono) !important;
+            font-size:11px !important;
+            line-height:1.7;
+            color:var(--text-dim) !important;
+            background:#0A0D10 !important;
+            border:1px solid var(--panel-line);
+            padding:12px !important;
+            white-space: pre-wrap;
+        }
+
+        @keyframes fadeIn{ to{ opacity:1; } }
+        @keyframes riseIn{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:translateY(0);} }
+        @keyframes blink{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
+        @keyframes drawBeam{ to{ transform:scaleX(1); } }
+        @keyframes sweep{ from{ left:-20%; } to{ left:100%; } }
+        @keyframes scanSweep { 0% { top: -10%; } 100% { top: 110%; } }
+        @keyframes pulseRing{ 0%{ opacity:.6; transform:scale(1);} 100%{ opacity:0; transform:scale(1.25);} }
+        @keyframes panelFade{ from{ opacity:0; transform:translateY(4px);} to{ opacity:1; transform:translateY(0);} }
+        @keyframes trip{
+            0%{ transform:translateX(0); }
+            20%{ transform:translateX(-4px); }
+            40%{ transform:translateX(4px); }
+            60%{ transform:translateX(-2px); }
+            80%{ transform:translateX(2px); }
+            100%{ transform:translateX(0); }
+        }
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+        @keyframes microGlitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-1px, 1px); }
+            40% { transform: translate(-1px, -1px); }
+            60% { transform: translate(1px, 1px); }
+            80% { transform: translate(1px, -1px); }
+            100% { transform: translate(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce){
+            *{ animation:none !important; transition:none !important; }
+        }
+
+        @media (max-width:640px){
+            .workspace{ flex-direction:column; }
+            .sidebar{
+                flex-direction:row;
+                flex-wrap:wrap;
+                width:100%;
+            }
+            .nav-item{
+                flex:1 1 30%;
+                flex-direction:column;
+                justify-content:center;
+                text-align:center;
+                border-left:none;
+                border-top:3px solid transparent;
+                gap:6px;
+                padding:10px 6px;
+            }
+            .nav-item.active{ border-left-color:transparent; border-top-color:var(--cyan); }
+            .nav-item .label .name{ white-space:normal; }
+        }
+
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+    <div id="historyModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>ANALYSIS HISTORY</span>
+                <button id="historyCloseBtn" type="button" class="modal-close">✕</button>
+            </div>
+            <div id="historyList" class="modal-list"></div>
+            <button id="historyClearBtn" type="button" class="hint-btn">Clear History</button>
+        </div>
+    </div>
+
+    <canvas id="wavecanvas"></canvas>
+    <div id="reticle"></div>
+    <div id="reticle-dot"></div>
+
+    <header class="site-header">
+        <a href="#top" class="brand"><span class="dot"></span>TRIPWIRE-NET</a>
+        <nav class="site-nav" aria-label="Primary">
+            <a class="nav-link" href="#how-it-works">How It Works</a>
+            <a class="nav-link" href="#accuracy">Accuracy</a>
+            <a class="nav-link" href="#faq">FAQ</a>
+            <a id="launchWebsiteBtn" class="nav-launch hidden" href="/" target="_blank" rel="noopener"><span class="dot"></span>Launch Website ↗</a>
+            <a class="nav-cta" href="#detect">Run Detection</a>
+        </nav>
+    </header>
+
+    <main class="page" id="top">
+        <section class="hero-marketing">
+            <div class="section-eyebrow">// MEDIA FORENSICS UNIT</div>
+            <h1>Tripwire</h1>
+            <p>Every voice, clip, frame, and paragraph crosses this line before it's trusted. Record or upload, and get back one verdict on whether it was made by a person or a model.</p>
+            <div class="hero-badges">
+                <span><b>4</b> input types — audio, video, image, text</span>
+                <span>open models, <b>no</b> black box</span>
+            </div>
+            <a class="hero-cta" href="#detect">Run a Detection ↓</a>
+        </section>
+
+    <div class="console" id="detect">
+        <div class="statusbar">
+            <span class="left"><span class="dot"></span>SYSTEM ARMED</span>
+            <span id="clock">00:00:00</span>
+            <span id="caseId">CASE #0000</span>
+            <button id="historyBtn" type="button" class="history-btn">↺ HISTORY</button>
+        </div>
+
+        <div class="beam-track">
+            <div class="beam-fill" id="beamFill"></div>
+            <div class="beam-sweep"></div>
+        </div>
+
+        <div class="sensor-label" style="margin-bottom:2px;">
+            <span>SELECT INPUT TYPE</span>
+        </div>
+
+        <div class="workspace">
+            <nav class="sidebar" role="tablist" aria-label="Input type selection">
+                <button class="nav-item active" id="tabBtnAudio" role="tab" aria-selected="true" aria-controls="panelAudio" data-target="panelAudio">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+                    <span class="label"><span class="name">AUDIO</span></span>
+                </button>
+                <button class="nav-item" id="tabBtnVideo" role="tab" aria-selected="false" aria-controls="panelVideo" data-target="panelVideo">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="14" height="14" rx="1.5"/><path d="M16 10l5-3v10l-5-3z"/></svg>
+                    <span class="label"><span class="name">VIDEO</span></span>
+                </button>
+                <button class="nav-item" id="tabBtnImage" role="tab" aria-selected="false" aria-controls="panelImage" data-target="panelImage">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16l-6-5-4.5 4-2.5-2-5 4"/></svg>
+                    <span class="label"><span class="name">IMAGE</span></span>
+                </button>
+                <button class="nav-item" id="tabBtnText" role="tab" aria-selected="false" aria-controls="panelText" data-target="panelText">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+                    <span class="label"><span class="name">TEXT</span></span>
+                </button>
+            </nav>
+
+            <div class="sensor-panel-wrap">
+                <div class="sensor active-panel" id="panelAudio" role="tabpanel" aria-labelledby="tabBtnAudio">
+                    <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+
+                    <div class="method-toggle">
+                        <button type="button" class="method-btn active" data-panel="panelAudio" data-method="record">Record</button>
+                        <button type="button" class="method-btn" data-panel="panelAudio" data-method="upload">Upload</button>
+                    </div>
+
+                    <div class="method-body active-method" id="panelAudio-record">
+                        <div style="position:relative;">
+                            <div id="audioTimerBadge" class="rec-timer hidden"><span class="dot-pulse"></span><span id="audioTimerText">00:00</span></div>
+                            <canvas id="liveAudioCanvas" style="width:100%; height:40px; margin-bottom:12px; display:none;"></canvas>
+                        </div>
+                        <button id="recordBtn">
+                            <span class="ring"></span>
+                            <span id="recordIcon">⏺</span>
+                            <span id="recordText">Record</span>
+                        </button>
+                        <p id="recordStatus" class="hidden">Recording — click to stop.</p>
+                    </div>
+
+                    <div class="method-body" id="panelAudio-upload">
+                        <form id="uploadForm">
+                            <div class="dropzone" id="dropzone">
+                                <input type="file" id="audioFile" accept="audio/*" multiple/>
+                            </div>
+                            <p class="hint">Multiple files supported — batch queue processing available.</p>
+                            <button type="submit">Analyze Upload(s)</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="sensor" id="panelVideo" role="tabpanel" aria-labelledby="tabBtnVideo">
+                    <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+
+                    <div class="method-toggle">
+                        <button type="button" class="method-btn active" data-panel="panelVideo" data-method="record">Record</button>
+                        <button type="button" class="method-btn" data-panel="panelVideo" data-method="upload">Upload</button>
+                    </div>
+
+                    <div class="method-body active-method" id="panelVideo-record">
+                        <div class="camera-frame">
+                            <div id="videoTimerBadge" class="rec-timer hidden"><span class="dot-pulse"></span><span id="videoTimerText">00:00</span></div>
+                            <div class="scanner-overlay" id="videoScanner"></div>
+                            <video id="videoCameraPreview" autoplay playsinline muted></video>
+                            <span class="camera-placeholder" id="videoCameraPlaceholder">Camera off</span>
+                        </div>
+                        <button id="videoCameraBtn" type="button">
+                            <span class="ring"></span>
+                            <span id="videoCameraIcon">⏺</span>
+                            <span id="videoCameraText">Start Camera</span>
+                        </button>
+                        <p id="videoCameraStatus" class="hint hidden">Recording — click to stop and analyze.</p>
+                    </div>
+
+                    <div class="method-body" id="panelVideo-upload">
+                        <form id="videoForm">
+                            <div class="dropzone" id="videoDropzone">
+                                <input type="file" id="videoFile" accept="video/*" multiple/>
+                            </div>
+                            <p class="hint">Batch queue supported — best on mp4/mov. A few seconds is enough.</p>
+                            <button type="submit">Analyze Video(s)</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="sensor" id="panelImage" role="tabpanel" aria-labelledby="tabBtnImage">
+                    <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+
+                    <div class="method-toggle">
+                        <button type="button" class="method-btn active" data-panel="panelImage" data-method="record">Camera</button>
+                        <button type="button" class="method-btn" data-panel="panelImage" data-method="upload">Upload</button>
+                    </div>
+
+                    <div class="method-body active-method" id="panelImage-record">
+                        <div class="camera-frame">
+                            <div class="scanner-overlay" id="imageScanner"></div>
+                            <video id="imageCameraPreview" autoplay playsinline muted></video>
+                            <span class="camera-placeholder" id="imageCameraPlaceholder">Camera off</span>
+                        </div>
+                        <button id="imageCameraBtn" type="button">
+                            <span id="imageCameraIcon">⏺</span>
+                            <span id="imageCameraText">Start Camera</span>
+                        </button>
+                        <p class="hint" id="imageCameraHint"></p>
+                    </div>
+
+                    <div class="method-body" id="panelImage-upload">
+                        <form id="imageForm">
+                            <div class="dropzone" id="imageDropzone">
+                                <input type="file" id="imageFile" accept="image/*" multiple/>
+                            </div>
+                            <p class="hint">Batch multiple image files for rapid artifact scanning.</p>
+                            <button type="submit">Analyze Image(s)</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="sensor" id="panelText" role="tabpanel" aria-labelledby="tabBtnText">
+                    <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+                    <form id="textForm">
+                        <textarea id="textInput" placeholder="Paste text here to check whether it reads as human-written or AI-generated..." rows="6"></textarea>
+                        <p class="hint" id="wordCountHint">0 words — 25+ recommended for a reliable reading</p>
+                        <button type="submit">Analyze Text</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="uploadProgress" class="hidden">
+            <span id="uploadProgressText">> uploading 0%</span>
+            <div class="bar-track"><div class="bar-fill" id="uploadProgressFill"></div></div>
+        </div>
+
+        <div id="loading" class="hidden">
+            <div class="line active" data-i="0"></div>
+            <div class="line" data-i="1"></div>
+            <div class="line" data-i="2"></div>
+        </div>
+
+        <div id="resultBox" class="hidden">
+            <h2 id="resultMessage"></h2>
+
+            <div id="gaugeWrap" class="gauge-wrap hidden">
+                <svg id="gaugeSvg" viewBox="0 0 200 120" class="gauge-svg">
+                    <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1E262D" stroke-width="14" stroke-linecap="round"></path>
+                    <path id="gaugeArc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#00E5A0" stroke-width="14" stroke-linecap="round" stroke-dasharray="251.2" stroke-dashoffset="251.2"></path>
+                    <text id="gaugeValue" x="100" y="92" text-anchor="middle" class="gauge-value">0%</text>
+                </svg>
+                <div id="gaugeLabel" class="gauge-label">CONFIDENCE</div>
+            </div>
+
+            <div id="heatmapPanel" class="feature-panel hidden">
+                <div class="breakdown-title">// Visual Heatmap (Grad-CAM, patch resolution)</div>
+                <div class="heatmap-stage">
+                    <img id="heatmapBase" class="heatmap-img" alt="Analyzed frame">
+                    <img id="heatmapOverlay" class="heatmap-img heatmap-overlay-img" alt="Heatmap overlay">
+                </div>
+                <label class="heatmap-toggle">
+                    <input type="checkbox" id="heatmapToggle" checked>
+                    Show overlay — red/yellow = regions that pushed the verdict toward AI-generated
+                </label>
+            </div>
+
+            <div id="facesPanel" class="feature-panel hidden">
+                <div class="breakdown-title">// Multi-Face Scan (<span id="faceCount">0</span> face<span id="facePlural">s</span>)</div>
+                <div id="facesList" class="faces-grid"></div>
+            </div>
+
+            <div id="timelinePanel" class="feature-panel hidden">
+                <div class="breakdown-title">// Per-Frame Timeline</div>
+                <svg id="timelineSvg" viewBox="0 0 600 140" class="timeline-svg" preserveAspectRatio="none"></svg>
+                <div class="timeline-legend">
+                    <span><span class="dot" style="background:var(--red)"></span> peak frame flagged</span>
+                    <span><span class="dot" style="background:var(--cyan)"></span> below threshold</span>
+                </div>
+            </div>
+
+            <div id="spectrogramPanel" class="feature-panel hidden">
+                <div class="breakdown-title">// Audio Waveform</div>
+                <canvas id="spectrogramCanvas" width="600" height="160" class="spectrogram-canvas"></canvas>
+                <div id="spectrogramStatus" class="hint" style="padding:4px 0 0;"></div>
+            </div>
+
+            <div id="provenancePanel" class="feature-panel hidden">
+                <div class="breakdown-title">// Metadata / Provenance Check</div>
+                <ul id="provenanceList" class="provenance-list"></ul>
+            </div>
+
+            <p id="resultRaw"></p>
+            <div id="breakdownMeters" class="breakdown-container hidden">
+                <div class="breakdown-title">// Confidence Feature Breakdown</div>
+                <div id="breakdownList"></div>
+            </div>
+            <div id="resultActions" class="hidden">
+                <button id="copySummaryBtn" type="button" class="export-btn">📋 Copy Summary</button>
+                <button id="shareLinkBtn" type="button" class="export-btn">🔗 Share Link</button>
+                <button id="exportPdfBtn" type="button" class="export-btn">⤓ PDF Report</button>
+                <button id="exportCsvBtn" type="button" class="export-btn">⤓ CSV Report</button>
+            </div>
+            <div id="shareLinkBox" class="hidden">
+                <input id="shareLinkInput" type="text" readonly>
+                <button id="shareLinkCopyBtn" type="button" class="export-btn">Copy</button>
+            </div>
+        </div>
+    </div>
+
+        <section class="wide-section" id="how-it-works">
+            <div class="section-eyebrow">// UNDER THE HOOD</div>
+            <h2 class="section-title">Four Inputs, Three Engines</h2>
+            <p class="section-lede">Recording and uploading audio both feed the same voice engine, and video and image both feed the same visual-artifact engine. Each engine is a separate open model doing one job — none of them share a verdict with another.</p>
+            <div class="engine-grid">
+                <div class="engine-card">
+                    <div class="eng-tag">AUDIO</div>
+                    <h3>Voice</h3>
+                    <p>Listens to a live recording or an uploaded clip and scores it for the acoustic fingerprints of synthetic speech. Most reliable on clips between 2.5–13 seconds.</p>
+                    <div class="eng-model">model: <b>wav2vec2-deepfake-voice-detector</b></div>
+                </div>
+                <div class="engine-card">
+                    <div class="eng-tag">VIDEO</div>
+                    <h3>Video</h3>
+                    <p>Samples frames evenly across the clip (recorded or uploaded) and checks each one for visual artifacts common to face-generation and face-swap models, then averages the result.</p>
+                    <div class="eng-model">model: <b>Deepfake-Detect-Siglip2</b></div>
+                </div>
+                <div class="engine-card">
+                    <div class="eng-tag">IMAGE</div>
+                    <h3>Image</h3>
+                    <p>Runs a captured or uploaded image through the same visual-artifact model used for video frames, checking for face-generation and face-swap fingerprints.</p>
+                    <div class="eng-model">model: <b>Deepfake-Detect-Siglip2</b> (shared with Video)</div>
+                </div>
+                <div class="engine-card">
+                    <div class="eng-tag">TEXT</div>
+                    <h3>Text</h3>
+                    <p>Reads pasted text for the statistical patterns of language-model output. Needs 25+ words to give a reading worth trusting.</p>
+                    <div class="eng-model">model: <b>xlm-roberta-text-detector</b></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="wide-section tight" id="accuracy">
+            <div class="section-eyebrow">// EVIDENCE STANDARD</div>
+            <h2 class="section-title">Read This Before You Trust a Verdict</h2>
+            <div class="notice">
+                <ul>
+                    <li><b>This is a signal, not proof.</b> Every verdict is a probability from a model, not a confirmed fact — treat it as one input among several, not a final answer.</li>
+                    <li><b>Short or noisy clips are less reliable.</b> Very short audio, low-frame-count video, and sub-25-word text all widen the margin for error — the tool flags this when it happens.</li>
+                    <li><b>False positives happen.</b> Plain, simple, or heavily-edited human writing and audio can occasionally read as synthetic. A single flag is a reason to look closer, not to conclude.</li>
+                    <li><b>Files aren't kept.</b> Uploaded audio and video are deleted from the server immediately after analysis; nothing is stored or reused.</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="wide-section tight" id="faq">
+            <div class="section-eyebrow">// FAQ</div>
+            <h2 class="section-title">Common Questions</h2>
+            <div class="faq-list">
+                <details class="faq-item">
+                    <summary>What file types can I upload?</summary>
+                    <p>Most common audio formats work for the audio input (wav, mp3, m4a, webm — browser recordings default to webm). The video input accepts standard containers like mp4 and mov; if a file won't open, re-encoding to mp4 usually fixes it. The image input accepts jpg, png, and webp.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Why did it flag my own writing as AI-generated?</summary>
+                    <p>Text detectors like this one are the least reliable of the four inputs — they're known to misfire on plain, short, or simply-structured writing regardless of who wrote it. Treat a text flag as a prompt to double-check, not a verdict on its own, especially under 25 words.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Is a "likely AI-generated" result something I can use as proof?</summary>
+                    <p>No. These are probabilistic classifiers, not forensic tools with legal standing. Use a result to decide whether something deserves closer scrutiny — not as evidence on its own.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Does anything get saved or sent elsewhere?</summary>
+                    <p>Uploaded audio and video are written to a temporary file for the length of the analysis and deleted immediately after, whether the analysis succeeds or fails. Pasted text is analyzed in memory and not persisted.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Which models power each input?</summary>
+                    <p>Voice runs on wav2vec2-deepfake-voice-detector, video and image both run on Deepfake-Detect-Siglip2, and text on an xlm-roberta text-detector — all open models, listed in full in the footer below.</p>
+                </details>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-brand">
+                <a href="#top" class="brand"><span class="dot"></span>TRIPWIRE-NET</a>
+                <p>Tripwire checks whether a voice, video, image, or piece of text is human-made or AI-generated, using open detection models. Signal analysis is probabilistic, not proof.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <a href="#detect">Run Detection</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#accuracy">Accuracy &amp; Limits</a>
+                <a href="#faq">FAQ</a>
+            </div>
+            <div class="footer-col">
+                <h4>Models In Use</h4>
+                <div class="footer-models">
+                    wav2vec2-deepfake-voice-detector<br>
+                    Deepfake-Detect-Siglip2 (video + image)<br>
+                    xlm-roberta-text-detector
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© <span id="year"></span> Tripwire-Net</span>
+            <span>Not legal proof · Local inference · Files deleted after analysis</span>
+        </div>
+    </footer>
+
+    <script>
+        (function(){
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/static/sw.js').catch(err => {
+                        console.warn('Service worker registration failed:', err);
+                    });
+                });
+            }
+
+            const params = new URLSearchParams(window.location.search);
+            const launchedViaAppScript = params.get('source') === 'app' || params.get('source') === 'pwa';
+
+            const isStandalone =
+                window.matchMedia('(display-mode: standalone)').matches ||
+                window.navigator.standalone === true || 
+                launchedViaAppScript; 
+
+            if (isStandalone) {
+                const launchBtn = document.getElementById('launchWebsiteBtn');
+                launchBtn.classList.remove('hidden');
+                const url = new URL(window.location.href);
+                url.searchParams.delete('source');
+                launchBtn.href = url.toString();
+            }
+        })();
+
+        // Web Audio API SFX Controller
+        const sfx = {
+            ctx: null,
+            humOsc: null,
+            humGain: null,
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+            playClick() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.04);
+                    gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.04);
+                } catch (e) { console.warn('SFX click failed', e); }
+            },
+            startHum() {
+                if (!this.ctx) return;
+                try {
+                    if (this.humOsc) this.stopHum();
+                    this.humOsc = this.ctx.createOscillator();
+                    this.humGain = this.ctx.createGain();
+                    this.humOsc.type = 'sawtooth';
+                    this.humOsc.frequency.value = 55;
+                    this.humGain.gain.setValueAtTime(0, this.ctx.currentTime);
+                    this.humGain.gain.linearRampToValueAtTime(0.03, this.ctx.currentTime + 0.5);
+                    this.humOsc.connect(this.humGain);
+                    this.humGain.connect(this.ctx.destination);
+                    this.humOsc.start();
+                } catch (e) { console.warn('SFX hum failed', e); }
+            },
+            stopHum() {
+                if (this.humGain) {
+                    this.humGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.5);
+                    setTimeout(() => {
+                        if (this.humOsc) {
+                            this.humOsc.stop();
+                            this.humOsc.disconnect();
+                            this.humOsc = null;
+                        }
+                    }, 500);
+                }
+            }
+        };
+
+        document.body.addEventListener('click', () => sfx.init(), { once: true });
+
+        // Recording Timers Helper
+        let activeTimer = null;
+        let timerSeconds = 0;
+        function startRecordingTimer(badgeElId, textElId) {
+            const badge = document.getElementById(badgeElId);
+            const textEl = document.getElementById(textElId);
+            if (!badge || !textEl) return;
+            badge.classList.remove('hidden');
+            timerSeconds = 0;
+            textEl.textContent = '00:00';
+            if (activeTimer) clearInterval(activeTimer);
+            activeTimer = setInterval(() => {
+                timerSeconds++;
+                const mins = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+                const secs = String(timerSeconds % 60).padStart(2, '0');
+                textEl.textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+        function stopRecordingTimer(badgeElId) {
+            if (activeTimer) clearInterval(activeTimer);
+            activeTimer = null;
+            const badge = document.getElementById(badgeElId);
+            if (badge) badge.classList.add('hidden');
+        }
+
+        (function(){
+            const reticle = document.getElementById('reticle');
+            const dot = document.getElementById('reticle-dot');
+            if (!reticle) return;
+            let rx=0, ry=0, x=0, y=0;
+            window.addEventListener('mousemove', e=>{
+                x = e.clientX; y = e.clientY;
+                dot.style.transform = `translate(${x}px, ${y}px)`;
+            });
+            function loop(){
+                rx += (x - rx) * 0.18;
+                ry += (y - ry) * 0.18;
+                reticle.style.transform = `translate(${rx}px, ${ry}px)`;
+                requestAnimationFrame(loop);
+            }
+            loop();
+            document.addEventListener('mouseover', e=>{
+                if (e.target.closest('button, a, input, label, .dropzone')) {
+                    reticle.classList.add('hot');
+                } else {
+                    reticle.classList.remove('hot');
+                }
+            });
+        })();
+
+        (function(){
+            const canvas = document.getElementById('wavecanvas');
+            const ctx = canvas.getContext('2d');
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            let dpr = 1;
+
+            function resize(){
+                dpr = Math.min(window.devicePixelRatio || 1, 2);
+                canvas.width = window.innerWidth * dpr;
+                canvas.height = window.innerHeight * dpr;
+                canvas.style.width = window.innerWidth + 'px';
+                canvas.style.height = window.innerHeight + 'px';
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            const COLORS = {
+                idle: [0, 224, 200],
+                scan: [255, 176, 32],
+                real: [50, 240, 120],
+                fake: [255, 64, 64]
+            };
+
+            let current = COLORS.idle.slice();
+            let target = COLORS.idle.slice();
+            let targetOpacity = 0.62;
+            let currentOpacity = 0.62;
+
+            window.setWaveState = function(state, opacity){
+                target = (COLORS[state] || COLORS.idle).slice();
+                if (typeof opacity === 'number') targetOpacity = opacity;
+            };
+
+            let t = 0;
+            const layers = [
+                { amp: 48, freq: 0.011, speed: 0.018, alpha: 1.0,  width: 2.6 },
+                { amp: 30, freq: 0.017, speed: -0.013, alpha: 0.65, width: 2.0 },
+                { amp: 18, freq: 0.026, speed: 0.026, alpha: 0.42, width: 1.5 }
+            ];
+
+            function frame(){
+                for (let i = 0; i < 3; i++) current[i] += (target[i] - current[i]) * 0.035;
+                currentOpacity += (targetOpacity - currentOpacity) * 0.05;
+
+                const w = window.innerWidth, h = window.innerHeight;
+                ctx.clearRect(0, 0, w, h);
+
+                const midY = h * 0.48;
+                const [r, g, b] = current.map(Math.round);
+                const strokeBase = `rgb(${r},${g},${b})`;
+
+                layers.forEach(layer => {
+                    ctx.beginPath();
+                    for (let x = 0; x <= w; x += 5){
+                        const y = midY
+                            + Math.sin(x * layer.freq + t * layer.speed) * layer.amp
+                            + Math.sin(x * layer.freq * 0.47 + t * layer.speed * 1.6) * layer.amp * 0.4;
+                        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    }
+                    ctx.strokeStyle = `rgba(${r},${g},${b},${(layer.alpha * currentOpacity).toFixed(3)})`;
+                    ctx.lineWidth = layer.width;
+                    ctx.shadowColor = strokeBase;
+                    ctx.shadowBlur = 14;
+                    ctx.stroke();
+                });
+                ctx.shadowBlur = 0;
+
+                if (!reduceMotion) t += 1;
+                requestAnimationFrame(frame);
+            }
+            frame();
+        })();
+
+        (function(){
+            const clock = document.getElementById('clock');
+            function tick(){
+                const d = new Date();
+                clock.textContent = d.toTimeString().slice(0,8);
+            }
+            tick();
+            setInterval(tick, 1000);
+            document.getElementById('caseId').textContent = 'CASE #' + Math.floor(1000 + Math.random()*9000);
+            const yearEl = document.getElementById('year');
+            if (yearEl) yearEl.textContent = new Date().getFullYear();
+        })();
+
+        function showToast(message, type = 'info', duration = 4500){
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.textContent = message;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.classList.add('leaving');
+                setTimeout(() => el.remove(), 200);
+            }, duration);
+        }
+
+        let currentCase = null;
+        function beginNewCase(type){
+            const id = 'CASE #' + Math.floor(1000 + Math.random() * 9000);
+            document.getElementById('caseId').textContent = id;
+            currentCase = { id, type, timestamp: Date.now() };
+            return currentCase;
+        }
+
+        const HISTORY_KEY = 'tripwire_history';
+        const HISTORY_MAX = 50;
+        let lastResult = null; 
+
+        function loadHistory(){
+            try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+            catch(e){ return []; }
+        }
+
+        function saveHistoryEntry(entry){
+            const hist = loadHistory();
+            hist.unshift(entry);
+            if (hist.length > HISTORY_MAX) hist.length = HISTORY_MAX;
+            try {
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+            } catch(e) {
+                console.warn('Could not save analysis history:', e);
+            }
+        }
+
+        function renderHistoryPanel(){
+            const list = document.getElementById('historyList');
+            const hist = loadHistory();
+            if (hist.length === 0) {
+                list.innerHTML = '<p class="hint" style="padding:14px 16px;">No past analyses yet — results are saved here after each run.</p>';
+                return;
+            }
+            list.innerHTML = hist.map(h => `
+                <div class="history-item ${h.verdict === 'FAKE' ? 'red' : 'green'}" data-id="${h.id}">
+                    <div class="history-item-top">
+                        <span>${h.id}</span>
+                        <span>${(h.type || '').toUpperCase()}</span>
+                        <span>${h.verdict} · ${h.confidence}%</span>
+                    </div>
+                    <div class="history-item-time">${new Date(h.timestamp).toLocaleString()}</div>
+                </div>
+            `).join('');
+            list.querySelectorAll('.history-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const entry = hist.find(h => h.id === el.dataset.id);
+                    if (entry) loadHistoryEntryIntoResult(entry);
+                });
+            });
+        }
+
+        let typingTimeout;
+        function typewriteMetrics(text, element) {
+            clearTimeout(typingTimeout);
+            let i = 0;
+            element.innerHTML = '<span class="cursor-blink">_</span>';
+            
+            function typeNext() {
+                if (i < text.length) {
+                    const currentText = text.substring(0, i + 1);
+                    element.innerHTML = currentText + '<span class="cursor-blink">_</span>';
+                    i++;
+                    typingTimeout = setTimeout(typeNext, Math.random() * 15 + 5); 
+                } else {
+                    element.innerHTML = text; 
+                }
+            }
+            typeNext();
+        }
+
+        function renderBreakdownMeters(rawResult, isFake) {
+            const container = document.getElementById('breakdownMeters');
+            const list = document.getElementById('breakdownList');
+            if (!rawResult || Object.keys(rawResult).length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+            
+            let html = '';
+            for (const [key, val] of Object.entries(rawResult)) {
+                let numericVal = parseFloat(val);
+                if (isNaN(numericVal)) continue;
+                let pct = Math.min(100, Math.max(5, Math.abs(numericVal)));
+                if (pct <= 1 && numericVal > 0) pct = numericVal * 100;
+                
+                html += `
+                    <div class="breakdown-row">
+                        <span class="breakdown-label" title="${key}">${key}</span>
+                        <div class="breakdown-track"><div class="breakdown-fill ${isFake ? 'alarm' : ''}" style="width: ${pct}%"></div></div>
+                        <span class="breakdown-val">${val}</span>
+                    </div>
+                `;
+            }
+            if (html) {
+                list.innerHTML = html;
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function loadHistoryEntryIntoResult(entry){
+            document.getElementById('historyModal').classList.add('hidden');
+            document.getElementById('caseId').textContent = entry.id;
+            currentCase = { id: entry.id, type: entry.type, timestamp: entry.timestamp };
+            lastResult = entry;
+
+            resultBox.classList.remove('hidden');
+            loading.classList.add('hidden');
+            uploadProgress.classList.add('hidden');
+            resultMessage.innerText = entry.message + '  (loaded from history)';
+
+            let rawText = "METRICS —\n";
+            for (const [key, value] of Object.entries(entry.raw_result || {})) {
+                rawText += `${key}: ${value}\n`;
+            }
+            typewriteMetrics(rawText, resultRaw);
+            renderBreakdownMeters(entry.raw_result, entry.verdict === 'FAKE');
+            hideAllFeaturePanels();
+            renderGauge(entry.confidence, entry.verdict === 'FAKE');
+
+            resultBox.className = entry.verdict === 'FAKE' ? 'armed-red' : 'armed-green';
+            document.getElementById('resultActions').classList.remove('hidden');
+            document.getElementById('shareLinkBox').classList.add('hidden');
+            showToast(`Loaded ${entry.id} from history`, 'success');
+        }
+
+        document.getElementById('historyBtn').addEventListener('click', () => {
+            renderHistoryPanel();
+            document.getElementById('historyModal').classList.remove('hidden');
+        });
+        document.getElementById('historyCloseBtn').addEventListener('click', () => {
+            document.getElementById('historyModal').classList.add('hidden');
+        });
+        document.getElementById('historyClearBtn').addEventListener('click', () => {
+            if (confirm('Clear all saved analysis history? This cannot be undone.')) {
+                localStorage.removeItem(HISTORY_KEY);
+                renderHistoryPanel();
+                showToast('History cleared', 'success');
+            }
+        });
+
+        function triggerDownload(blob, filename){
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportReportCSV(){
+            if (!lastResult) return;
+            const rows = [
+                ['Case ID', lastResult.id],
+                ['Timestamp', new Date(lastResult.timestamp).toISOString()],
+                ['Input Type', lastResult.type],
+                ['Verdict', lastResult.verdict],
+                ['Confidence %', lastResult.confidence],
+                ['Message', lastResult.message],
+                [],
+                ['Metric', 'Value'],
+                ...Object.entries(lastResult.raw_result || {}),
+            ];
+            const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            triggerDownload(blob, `tripwire_${lastResult.id.replace(/[^a-z0-9]/gi, '_')}.csv`);
+            showToast('CSV report downloaded', 'success');
+        }
+
+        function exportReportPDF(){
+            if (!lastResult) return;
+            if (!window.jspdf) {
+                showToast('PDF library failed to load — try the CSV export instead.', 'error');
+                return;
+            }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            doc.setFont('courier', 'bold');
+            doc.setFontSize(15);
+            doc.text('TRIPWIRE — Synthetic Media Detection Report', 14, 18);
+
+            doc.setDrawColor(180);
+            doc.line(14, 22, 196, 22);
+
+            let y = 34;
+            const field = (label, value) => { doc.text(`${label}: ${value}`, 14, y); y += 8; };
+
+            doc.setFont('courier', 'normal');
+            doc.setFontSize(11);
+            field('Case ID', lastResult.id);
+            field('Timestamp', new Date(lastResult.timestamp).toLocaleString());
+            field('Input Type', (lastResult.type || '').toUpperCase());
+            field('Verdict', lastResult.verdict);
+            field('Confidence', lastResult.confidence + '%');
+
+            y += 4;
+            doc.setFont('courier', 'bold');
+            doc.text('Mathematical Metrics', 14, y);
+            y += 8;
+
+            doc.setFont('courier', 'normal');
+            doc.setFontSize(10);
+            for (const [key, value] of Object.entries(lastResult.raw_result || {})) {
+                if (y > 280) { doc.addPage(); y = 20; }
+                doc.text(`${key}: ${String(value)}`, 14, y);
+                y += 6;
+            }
+
+            doc.save(`tripwire_${lastResult.id.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+            showToast('PDF report downloaded', 'success');
+        }
+
+        function copyCaseSummary(){
+            if (!lastResult) return;
+            let md = `### TRIPWIRE FORENSIC REPORT [${lastResult.id}]\n`;
+            md += `- **Timestamp**: ${new Date(lastResult.timestamp).toLocaleString()}\n`;
+            md += `- **Input Type**: ${(lastResult.type || '').toUpperCase()}\n`;
+            md += `- **Verdict**: ${lastResult.verdict} (${lastResult.confidence}% Confidence)\n`;
+            md += `- **Status Message**: ${lastResult.message}\n\n`;
+            md += `**Metrics:**\n`;
+            for (const [k, v] of Object.entries(lastResult.raw_result || {})) {
+                md += `- ${k}: ${v}\n`;
+            }
+            navigator.clipboard.writeText(md).then(() => {
+                showToast('Case summary copied to clipboard in Markdown', 'success');
+            }).catch(() => {
+                showToast('Failed to copy to clipboard', 'error');
+            });
+        }
+
+        document.getElementById('exportPdfBtn').addEventListener('click', exportReportPDF);
+        document.getElementById('exportCsvBtn').addEventListener('click', exportReportCSV);
+        document.getElementById('copySummaryBtn').addEventListener('click', copyCaseSummary);
+
+        const LOADING_LINES = {
+            mic:   ["> sampling waveform", "> extracting spectral features", "> running inference"],
+            audio: ["> decoding audio file", "> extracting spectral features", "> running inference"],
+            video: ["> extracting frames", "> scanning faces frame-by-frame", "> aggregating verdict"],
+            image: ["> loading image", "> scanning for synthesis artifacts", "> running classifier"],
+            text:  ["> tokenizing text", "> embedding sequence", "> running classifier"]
+        };
+
+        let typeInterval = null;
+
+        function toggleScanner(mode, forceState) {
+            const vScanner = document.getElementById('videoScanner');
+            const iScanner = document.getElementById('imageScanner');
+            if (vScanner) vScanner.classList.toggle('active', mode === 'video' && forceState);
+            if (iScanner) iScanner.classList.toggle('active', mode === 'image' && forceState);
+        }
+
+        function startLoadingAnim(mode){
+            sfx.startHum();
+            const lines = document.querySelectorAll('#loading .line');
+            const texts = LOADING_LINES[mode] || LOADING_LINES.audio;
+            
+            lines.forEach(l => {
+                l.innerHTML = '';
+                l.classList.remove('active');
+            });
+            
+            let currentLine = 0;
+            let currentChar = 0;
+            lines[0].classList.add('active');
+
+            function typeChar() {
+                if (currentLine >= lines.length) return; 
+                
+                const targetText = texts[currentLine] || "> processing";
+                
+                if (currentChar < targetText.length) {
+                    lines[currentLine].innerHTML = targetText.substring(0, currentChar + 1) + '<span class="cursor-blink">_</span>';
+                    currentChar++;
+                    typeInterval = setTimeout(typeChar, Math.random() * 30 + 20); 
+                } else {
+                    lines[currentLine].innerHTML = targetText; 
+                    lines[currentLine].classList.remove('active');
+                    
+                    currentLine++;
+                    currentChar = 0;
+                    
+                    if (currentLine < lines.length) {
+                        lines[currentLine].classList.add('active');
+                        typeInterval = setTimeout(typeChar, 300); 
+                    }
+                }
+            }
+            
+            typeChar();
+        }
+
+        function stopLoadingAnim(){
+            sfx.stopHum();
+            toggleScanner(null, false);
+            if (typeInterval) clearTimeout(typeInterval);
+        }
+
+        const resultBox = document.getElementById('resultBox');
+        const loading = document.getElementById('loading');
+        const resultMessage = document.getElementById('resultMessage');
+        const resultRaw = document.getElementById('resultRaw');
+        const beamFill = document.getElementById('beamFill');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const uploadProgressText = document.getElementById('uploadProgressText');
+        const uploadProgressFill = document.getElementById('uploadProgressFill');
+
+        const MAX_UPLOAD_MB = { audio: 25, video: 300, image: 15 };
+
+        function validateFileSize(file, kind, label){
+            const maxMB = MAX_UPLOAD_MB[kind];
+            const fileMB = file.size / (1024 * 1024);
+            if (fileMB > maxMB) {
+                showToast(`${label} is ${fileMB.toFixed(1)}MB, exceeding the ${maxMB}MB limit.`, 'error');
+                return false;
+            }
+            return true;
+        }
+
+        function showResult(data, statusOk){
+            loading.classList.add('hidden');
+            uploadProgress.classList.add('hidden');
+            resultBox.classList.remove('hidden');
+            const resultActions = document.getElementById('resultActions');
+
+            if (!statusOk || data.error) {
+                resultMessage.innerText = "Error Analyzing Input";
+                resultRaw.innerText = data.error || "Unexpected server error.";
+                resultBox.className = "";
+                document.getElementById('breakdownMeters').classList.add('hidden');
+                hideAllFeaturePanels();
+                resultActions.classList.add('hidden');
+                if (window.setWaveState) window.setWaveState('idle', 0.62);
+                return;
+            }
+
+            resultMessage.innerText = data.message;
+
+            let rawText = "METRICS —\n";
+            for (const [key, value] of Object.entries(data.raw_result || {})) {
+                rawText += `${key}: ${value}\n`;
+            }
+            typewriteMetrics(rawText, resultRaw);
+
+            const isFake = data.is_deepfake;
+            renderBreakdownMeters(data.raw_result, isFake);
+            renderGauge(data.confidence, isFake);
+            renderHeatmapPanel(data);
+            renderFacesPanel(data.faces || data.peak_frame_faces);
+            renderTimelinePanel(data.frame_timeline);
+            renderProvenancePanel(data.provenance);
+
+            const verdict = isFake ? 'FAKE' : 'REAL';
+            if (isFake) {
+                resultBox.className = "armed-red";
+                beamFill.classList.add('alarm');
+                if (window.setWaveState) window.setWaveState('fake', 0.85);
+            } else {
+                resultBox.className = "armed-green";
+                beamFill.classList.remove('alarm');
+                if (window.setWaveState) window.setWaveState('real', 0.85);
+            }
+
+            const entry = {
+                id: (currentCase && currentCase.id) || document.getElementById('caseId').textContent,
+                type: (currentCase && currentCase.type) || 'unknown',
+                timestamp: (currentCase && currentCase.timestamp) || Date.now(),
+                verdict,
+                confidence: data.confidence,
+                message: data.message,
+                raw_result: data.raw_result,
+            };
+            lastResult = entry;
+            saveHistoryEntry(entry);
+            resultActions.classList.remove('hidden');
+            document.getElementById('shareLinkBox').classList.add('hidden');
+        }
+
+        // ---------------------------------------------------------------
+        // Confidence gauge (radial SVG arc, 0-100%)
+        // ---------------------------------------------------------------
+        const GAUGE_ARC_LENGTH = 251.2; // path length of the half-circle above
+        function renderGauge(confidencePct, isFake){
+            const wrap = document.getElementById('gaugeWrap');
+            if (confidencePct === undefined || confidencePct === null) {
+                wrap.classList.add('hidden');
+                return;
+            }
+            wrap.classList.remove('hidden');
+            const pct = Math.max(0, Math.min(100, confidencePct));
+            const offset = GAUGE_ARC_LENGTH * (1 - pct / 100);
+            const arc = document.getElementById('gaugeArc');
+            arc.style.strokeDashoffset = String(offset);
+            arc.setAttribute('stroke', isFake ? '#FF3B3B' : '#00E5A0');
+            document.getElementById('gaugeValue').textContent = pct.toFixed(1) + '%';
+            document.getElementById('gaugeLabel').textContent = isFake ? 'CONFIDENCE — LIKELY AI' : 'CONFIDENCE — LIKELY AUTHENTIC';
+        }
+
+        // ---------------------------------------------------------------
+        // Grad-CAM style heatmap overlay
+        // ---------------------------------------------------------------
+        function renderHeatmapPanel(data){
+            const panel = document.getElementById('heatmapPanel');
+            const overlayImg = document.getElementById('heatmapOverlay');
+            const baseImg = document.getElementById('heatmapBase');
+            const basePreview = data.image_preview || data.peak_frame_preview;
+
+            if (!data.heatmap_overlay && !basePreview) {
+                panel.classList.add('hidden');
+                return;
+            }
+            panel.classList.remove('hidden');
+            if (basePreview) baseImg.src = basePreview;
+            if (data.heatmap_overlay) {
+                overlayImg.src = data.heatmap_overlay;
+                overlayImg.classList.remove('hidden');
+            } else {
+                overlayImg.classList.add('hidden');
+            }
+        }
+        document.getElementById('heatmapToggle').addEventListener('change', (e) => {
+            document.getElementById('heatmapOverlay').style.display = e.target.checked ? '' : 'none';
+        });
+
+        // ---------------------------------------------------------------
+        // Multi-face detection results
+        // ---------------------------------------------------------------
+        function renderFacesPanel(faceData){
+            const panel = document.getElementById('facesPanel');
+            if (!faceData || !faceData.face_count) {
+                panel.classList.add('hidden');
+                return;
+            }
+            panel.classList.remove('hidden');
+            document.getElementById('faceCount').textContent = faceData.face_count;
+            document.getElementById('facePlural').textContent = faceData.face_count === 1 ? '' : 's';
+
+            const list = document.getElementById('facesList');
+            list.innerHTML = faceData.faces.map(f => `
+                <div class="face-card ${f.verdict === 'RED_SPOOF' ? 'red' : 'green'}">
+                    <div>#${f.index + 1}</div>
+                    <div class="face-verdict">${f.verdict === 'RED_SPOOF' ? 'FAKE' : 'REAL'}</div>
+                    <div>${f.confidence_percent}%</div>
+                    <div class="face-box">${f.box.w}×${f.box.h}px${f.low_resolution_warning ? ' ⚠' : ''}</div>
+                </div>
+            `).join('');
+        }
+
+        // ---------------------------------------------------------------
+        // Video per-frame timeline graph
+        // ---------------------------------------------------------------
+        function renderTimelinePanel(timeline){
+            const panel = document.getElementById('timelinePanel');
+            if (!timeline || !timeline.fake_scores || timeline.fake_scores.length < 2) {
+                panel.classList.add('hidden');
+                return;
+            }
+            panel.classList.remove('hidden');
+
+            const svg = document.getElementById('timelineSvg');
+            const W = 600, H = 140, padL = 30, padB = 22, padT = 10, padR = 10;
+            const plotW = W - padL - padR, plotH = H - padT - padB;
+            const scores = timeline.fake_scores;
+            const n = scores.length;
+            const xFor = i => padL + (plotW * i / (n - 1));
+            const yFor = s => padT + plotH * (1 - s);
+
+            let svgHtml = '';
+            // threshold line at 0.5
+            svgHtml += `<line x1="${padL}" y1="${yFor(0.5)}" x2="${W-padR}" y2="${yFor(0.5)}" stroke="#6B7680" stroke-dasharray="4,4" stroke-width="1"/>`;
+            svgHtml += `<text x="${W-padR}" y="${yFor(0.5)-4}" text-anchor="end" font-size="9" fill="#6B7680" font-family="monospace">0.5 threshold</text>`;
+
+            let pathD = '';
+            scores.forEach((s, i) => {
+                const x = xFor(i), y = yFor(s);
+                pathD += (i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`);
+            });
+            svgHtml += `<path d="${pathD}" fill="none" stroke="#00E5A0" stroke-width="2"/>`;
+
+            scores.forEach((s, i) => {
+                const x = xFor(i), y = yFor(s);
+                const flagged = s > 0.5;
+                const isPeak = i === timeline.peak_frame_index;
+                const r = isPeak ? 5 : 3.5;
+                svgHtml += `<circle cx="${x}" cy="${y}" r="${r}" fill="${flagged ? '#FF3B3B' : '#00E5A0'}" stroke="${isPeak ? '#fff' : 'none'}" stroke-width="1"/>`;
+            });
+
+            // x-axis frame index labels
+            svgHtml += `<text x="${padL}" y="${H-6}" font-size="9" fill="#6B7680" font-family="monospace">frame 1</text>`;
+            svgHtml += `<text x="${W-padR}" y="${H-6}" text-anchor="end" font-size="9" fill="#6B7680" font-family="monospace">frame ${n}</text>`;
+
+            svg.innerHTML = svgHtml;
+        }
+
+        // ---------------------------------------------------------------
+        // Metadata / C2PA provenance panel
+        // ---------------------------------------------------------------
+        function renderProvenancePanel(prov){
+            const panel = document.getElementById('provenancePanel');
+            if (!prov || !prov.findings || !prov.findings.length) {
+                panel.classList.add('hidden');
+                return;
+            }
+            panel.classList.remove('hidden');
+            document.getElementById('provenanceList').innerHTML =
+                prov.findings.map(line => `<li>${line}</li>`).join('');
+        }
+
+        function hideAllFeaturePanels(){
+            ['gaugeWrap','heatmapPanel','facesPanel','timelinePanel','provenancePanel','spectrogramPanel'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+        }
+
+        // ---------------------------------------------------------------
+        // Shareable result link
+        // ---------------------------------------------------------------
+        document.getElementById('shareLinkBtn').addEventListener('click', async () => {
+            if (!lastResult) return;
+            const btn = document.getElementById('shareLinkBtn');
+            btn.disabled = true;
+            btn.textContent = '🔗 Creating link…';
+            try {
+                const res = await fetch('/share', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(lastResult),
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) throw new Error(data.error || 'Failed to create link');
+
+                const box = document.getElementById('shareLinkBox');
+                const input = document.getElementById('shareLinkInput');
+                input.value = data.share_url;
+                box.classList.remove('hidden');
+                showToast('Shareable link created', 'success');
+            } catch (e) {
+                showToast('Could not create share link: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔗 Share Link';
+            }
+        });
+        document.getElementById('shareLinkCopyBtn').addEventListener('click', () => {
+            const input = document.getElementById('shareLinkInput');
+            input.select();
+            navigator.clipboard.writeText(input.value).then(() => {
+                showToast('Link copied to clipboard', 'success');
+            }).catch(() => showToast('Failed to copy link', 'error'));
+        });
+
+        // Batch Queue Runner for Multiple File Uploads
+        async function handleBatchFiles(url, files, mode) {
+            if (!files || files.length === 0) return;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (!validateFileSize(file, mode, file.name)) continue;
+                showToast(`Queue progress: analyzing file ${i+1} of ${files.length} (${file.name})`, 'info', 3000);
+                await sendFileToBackendSync(url, file, file.name, mode);
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // Client-side amplitude waveform renderer
+        // ---------------------------------------------------------------
+        async function drawAudioSpectrogram(blobOrFile) {
+            const panel = document.getElementById('spectrogramPanel');
+            const status = document.getElementById('spectrogramStatus');
+            const canvas = document.getElementById('spectrogramCanvas');
+            
+            panel.querySelector('.breakdown-title').textContent = '// Audio Waveform';
+            panel.classList.remove('hidden');
+            status.textContent = '> decoding audio…';
+
+            try {
+                const arrayBuf = await blobOrFile.arrayBuffer();
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioCtx();
+                const audioBuf = await ctx.decodeAudioData(arrayBuf.slice(0));
+                const samples = audioBuf.getChannelData(0);
+                ctx.close();
+
+                const ctx2d = canvas.getContext('2d');
+                const W = canvas.width;
+                const H = canvas.height;
+
+                // Clear the canvas
+                ctx2d.clearRect(0, 0, W, H);
+
+                // Configure waveform styling
+                ctx2d.lineWidth = 1;
+                ctx2d.strokeStyle = '#00E5A0'; // Tripwire cyan
+                ctx2d.beginPath();
+
+                // Calculate how many audio samples fit into a single pixel width
+                const step = Math.ceil(samples.length / W);
+                const midY = H / 2;
+
+                // Loop through each pixel column
+                for (let x = 0; x < W; x++) {
+                    let min = 1.0;
+                    let max = -1.0;
+                    
+                    // Find the min/max amplitude within this chunk of samples
+                    for (let j = 0; j < step; j++) {
+                        const datum = samples[(x * step) + j];
+                        if (datum < min) min = datum;
+                        if (datum > max) max = datum;
+                    }
+                    
+                    // Draw a vertical line from the min peak to the max peak
+                    ctx2d.moveTo(x, midY + (min * midY * 0.9)); // 0.9 adds slight padding
+                    ctx2d.lineTo(x, midY + (max * midY * 0.9));
+                }
+                ctx2d.stroke();
+
+                status.textContent = `> ${audioBuf.duration.toFixed(1)}s decoded · waveform rendered`;
+            } catch (e) {
+                console.error('Waveform error:', e);
+                status.textContent = '> could not render waveform for this clip';
+                const ctx2d = canvas.getContext('2d');
+                ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function sendFileToBackendSync(url, file, filename, mode) {
+            return new Promise((resolve) => {
+                beginNewCase(mode);
+                resultBox.classList.add('hidden');
+                resultBox.className = 'hidden';
+                document.getElementById('resultActions').classList.add('hidden');
+                loading.classList.add('hidden');
+                uploadProgress.classList.remove('hidden');
+                if (mode === 'audio' || mode === 'mic') {
+                    drawAudioSpectrogram(file);
+                } else {
+                    document.getElementById('spectrogramPanel').classList.add('hidden');
+                }
+                uploadProgressFill.style.width = '0%';
+                uploadProgressText.textContent = `> uploading ${filename} (0%)`;
+                if (window.setWaveState) window.setWaveState('scan', 0.75);
+
+                toggleScanner(mode, true);
+                sfx.startHum();
+
+                const formData = new FormData();
+                formData.append('file', file, filename);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', url);
+
+                xhr.upload.onprogress = (e) => {
+                    if (!e.lengthComputable) return;
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    uploadProgressFill.style.width = pct + '%';
+                    uploadProgressText.textContent = pct < 100
+                        ? `> uploading ${filename} (${pct}%)`
+                        : `> upload complete — analyzing ${filename}...`;
+                    if (pct >= 100) {
+                        uploadProgress.classList.add('hidden');
+                        loading.classList.remove('hidden');
+                        startLoadingAnim(mode);
+                    }
+                };
+
+                xhr.onload = () => {
+                    let data = {};
+                    try { data = JSON.parse(xhr.responseText); } catch (e) { data = {}; }
+                    stopLoadingAnim();
+                    if (xhr.status === 200 && !data.error) {
+                        showResult(data, true);
+                    } else {
+                        showResult(data.error ? data : { error: `Unexpected response status ${xhr.status}` }, false);
+                    }
+                    resolve();
+                };
+
+                xhr.onerror = () => {
+                    stopLoadingAnim();
+                    loading.classList.add('hidden');
+                    uploadProgress.classList.add('hidden');
+                    if (window.setWaveState) window.setWaveState('idle', 0.62);
+                    showToast('Connection error during batch upload.', 'error');
+                    resolve();
+                };
+
+                xhr.send(formData);
+            });
+        }
+
+        async function sendToBackend(url, fetchOptions, mode){
+            beginNewCase(mode);
+            resultBox.classList.add('hidden');
+            resultBox.className = 'hidden';
+            document.getElementById('resultActions').classList.add('hidden');
+            document.getElementById('spectrogramPanel').classList.add('hidden');
+            uploadProgress.classList.add('hidden');
+            loading.classList.remove('hidden');
+            startLoadingAnim(mode);
+            if (window.setWaveState) window.setWaveState('scan', 0.75);
+
+            try {
+                const response = await fetch(url, fetchOptions);
+                const data = await response.json();
+                stopLoadingAnim();
+                if (response.status === 429) {
+                    showToast(data.error || 'Too many requests — please slow down.', 'error');
+                }
+                showResult(data, response.ok);
+            } catch (error) {
+                stopLoadingAnim();
+                loading.classList.add('hidden');
+                if (window.setWaveState) window.setWaveState('idle', 0.62);
+                showToast('Connection error. Is the server running?', 'error');
+                console.error(error);
+            }
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('audioFile');
+            if (fileInput.files.length === 0) {
+                showToast("Please select audio file(s) first.", "error");
+                return;
+            }
+            handleBatchFiles('/analyze', fileInput.files, 'audio');
+        });
+
+        document.getElementById('videoForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('videoFile');
+            if (fileInput.files.length === 0) {
+                showToast("Please select video file(s) first.", "error");
+                return;
+            }
+            handleBatchFiles('/analyze-video', fileInput.files, 'video');
+        });
+
+        document.getElementById('imageForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('imageFile');
+            if (fileInput.files.length === 0) {
+                showToast("Please select image file(s) first.", "error");
+                return;
+            }
+            handleBatchFiles('/analyze-image', fileInput.files, 'image');
+        });
+
+        const textInput = document.getElementById('textInput');
+        const wordCountHint = document.getElementById('wordCountHint');
+        textInput.addEventListener('input', () => {
+            const words = textInput.value.trim().split(/\s+/).filter(Boolean).length;
+            wordCountHint.textContent = words === 0
+                ? "0 words — 25+ recommended for a reliable reading"
+                : `${words} word${words === 1 ? '' : 's'}` + (words < 25 ? " — 25+ recommended for a reliable reading" : "");
+        });
+        document.getElementById('textForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = textInput.value.trim();
+            if (!text) {
+                showToast("Please enter some text first.", "error");
+                return;
+            }
+            sendToBackend('/analyze-text', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            }, 'text');
+        });
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        let audioCtx, analyser, dataArray, visualizerId;
+        const liveAudioCanvas = document.getElementById('liveAudioCanvas');
+        const canvasCtx = liveAudioCanvas ? liveAudioCanvas.getContext('2d') : null;
+
+        const recordBtn = document.getElementById('recordBtn');
+        const recordText = document.getElementById('recordText');
+        const recordIcon = document.getElementById('recordIcon');
+        const recordStatus = document.getElementById('recordStatus');
+
+        recordBtn.addEventListener('click', async () => {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    if (window.AudioContext || window.webkitAudioContext) {
+                        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        const source = audioCtx.createMediaStreamSource(stream);
+                        analyser = audioCtx.createAnalyser();
+                        analyser.fftSize = 64;
+                        source.connect(analyser);
+                        const bufferLength = analyser.frequencyBinCount;
+                        dataArray = new Uint8Array(bufferLength);
+                        
+                        liveAudioCanvas.style.display = 'block';
+                        liveAudioCanvas.width = liveAudioCanvas.offsetWidth;
+                        
+                        function drawVisualizer() {
+                            visualizerId = requestAnimationFrame(drawVisualizer);
+                            analyser.getByteFrequencyData(dataArray);
+                            canvasCtx.fillStyle = '#11161B'; 
+                            canvasCtx.fillRect(0, 0, liveAudioCanvas.width, liveAudioCanvas.height);
+                            const barWidth = (liveAudioCanvas.width / bufferLength) * 2.5;
+                            let barHeight, x = 0;
+                            for(let i = 0; i < bufferLength; i++) {
+                                barHeight = dataArray[i] / 2;
+                                canvasCtx.fillStyle = '#00E5A0'; 
+                                canvasCtx.fillRect(x, liveAudioCanvas.height - barHeight / 2, barWidth, barHeight / 2);
+                                x += barWidth + 1;
+                            }
+                        }
+                        drawVisualizer();
+                    }
+
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+
+                    mediaRecorder.onstop = () => {
+                        stopRecordingTimer('audioTimerBadge');
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        stream.getTracks().forEach(track => track.stop());
+
+                        if (visualizerId) cancelAnimationFrame(visualizerId);
+                        liveAudioCanvas.style.display = 'none';
+                        if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+
+                        if (!validateFileSize(audioBlob, 'audio', 'Recording')) return;
+                        sendFileToBackendSync('/analyze', audioBlob, 'live_recording.webm', 'mic');
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    startRecordingTimer('audioTimerBadge', 'audioTimerText');
+
+                    recordBtn.classList.add('armed');
+                    recordText.innerText = "Stop";
+                    recordIcon.innerText = "⏹";
+                    recordStatus.classList.remove('hidden');
+                    if (window.setWaveState) window.setWaveState('scan', 0.75);
+
+                } catch (err) {
+                    showToast("Microphone access denied or unavailable.", "error");
+                    console.error("Microphone Error: ", err);
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+
+                recordBtn.classList.remove('armed');
+                recordText.innerText = "Record";
+                recordIcon.innerText = "⏺";
+                recordStatus.classList.add('hidden');
+            }
+        });
+
+        let videoCamStream = null;
+        let videoMediaRecorder;
+        let videoChunks = [];
+        let videoIsRecording = false;
+
+        const videoCameraBtn = document.getElementById('videoCameraBtn');
+        const videoCameraPreview = document.getElementById('videoCameraPreview');
+        const videoCameraPlaceholder = document.getElementById('videoCameraPlaceholder');
+        const videoCameraIcon = document.getElementById('videoCameraIcon');
+        const videoCameraText = document.getElementById('videoCameraText');
+        const videoCameraStatus = document.getElementById('videoCameraStatus');
+
+        videoCameraBtn.addEventListener('click', async () => {
+            if (!videoIsRecording) {
+                try {
+                    videoCamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    videoCameraPreview.srcObject = videoCamStream;
+                    videoCameraPlaceholder.classList.add('hidden');
+
+                    videoMediaRecorder = new MediaRecorder(videoCamStream);
+                    videoChunks = [];
+                    videoMediaRecorder.ondataavailable = e => videoChunks.push(e.data);
+                    videoMediaRecorder.onstop = () => {
+                        stopRecordingTimer('videoTimerBadge');
+                        const blob = new Blob(videoChunks, { type: 'video/webm' });
+                        if (videoCamStream) videoCamStream.getTracks().forEach(t => t.stop());
+                        videoCamStream = null;
+                        videoCameraPreview.srcObject = null;
+                        videoCameraPlaceholder.classList.remove('hidden');
+                        if (!validateFileSize(blob, 'video', 'Recording')) return;
+                        sendFileToBackendSync('/analyze-video', blob, 'camera_recording.webm', 'video');
+                    };
+
+                    videoMediaRecorder.start();
+                    videoIsRecording = true;
+                    startRecordingTimer('videoTimerBadge', 'videoTimerText');
+
+                    videoCameraBtn.classList.add('armed');
+                    videoCameraIcon.innerText = "⏹";
+                    videoCameraText.innerText = "Stop";
+                    videoCameraStatus.classList.remove('hidden');
+                    if (window.setWaveState) window.setWaveState('scan', 0.75);
+                } catch (err) {
+                    showToast("Camera access denied or unavailable.", "error");
+                    console.error("Camera Error: ", err);
+                }
+            } else {
+                videoMediaRecorder.stop();
+                videoIsRecording = false;
+                videoCameraBtn.classList.remove('armed');
+                videoCameraIcon.innerText = "⏺";
+                videoCameraText.innerText = "Start Camera";
+                videoCameraStatus.classList.add('hidden');
+            }
+        });
+
+        let imageCameraStream = null;
+        let imageCameraOn = false;
+
+        const imageCameraBtn = document.getElementById('imageCameraBtn');
+        const imageCameraPreview = document.getElementById('imageCameraPreview');
+        const imageCameraPlaceholder = document.getElementById('imageCameraPlaceholder');
+        const imageCameraIcon = document.getElementById('imageCameraIcon');
+        const imageCameraText = document.getElementById('imageCameraText');
+        const imageCameraHint = document.getElementById('imageCameraHint');
+
+        function stopImageCamera(){
+            if (imageCameraStream){
+                imageCameraStream.getTracks().forEach(t => t.stop());
+            }
+            imageCameraStream = null;
+            imageCameraPreview.srcObject = null;
+            imageCameraPlaceholder.classList.remove('hidden');
+            imageCameraOn = false;
+            imageCameraBtn.classList.remove('ready');
+            imageCameraIcon.innerText = "⏺";
+            imageCameraText.innerText = "Start Camera";
+            imageCameraHint.innerText = "";
+        }
+
+        imageCameraBtn.addEventListener('click', async () => {
+            if (!imageCameraOn) {
+                try {
+                    imageCameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    imageCameraPreview.srcObject = imageCameraStream;
+                    imageCameraPlaceholder.classList.add('hidden');
+                    imageCameraOn = true;
+                    imageCameraBtn.classList.add('ready');
+                    imageCameraIcon.innerText = "📷";
+                    imageCameraText.innerText = "Capture & Analyze";
+                    imageCameraHint.innerText = "Camera is live — click to capture.";
+                } catch (err) {
+                    showToast("Camera access denied or unavailable.", "error");
+                    console.error("Camera Error: ", err);
+                }
+            } else {
+                const canvas = document.createElement('canvas');
+                canvas.width = imageCameraPreview.videoWidth || 640;
+                canvas.height = imageCameraPreview.videoHeight || 480;
+                canvas.getContext('2d').drawImage(imageCameraPreview, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(blob => {
+                    if (!validateFileSize(blob, 'image', 'Capture')) return;
+                    sendFileToBackendSync('/analyze-image', blob, 'capture.png', 'image');
+                }, 'image/png');
+                stopImageCamera();
+            }
+        });
+
+        function stopAllCameraPreviews(){
+            stopImageCamera();
+            if (videoCamStream && !videoIsRecording){
+                videoCamStream.getTracks().forEach(t => t.stop());
+                videoCamStream = null;
+                videoCameraPreview.srcObject = null;
+                videoCameraPlaceholder.classList.remove('hidden');
+            }
+        }
+
+        document.querySelectorAll('.nav-item, .method-btn').forEach(btn => {
+            btn.addEventListener('click', () => sfx.playClick());
+        });
+
+        document.querySelectorAll('.nav-item').forEach(tab=>{
+            tab.addEventListener('click', ()=>{
+                if (tab.classList.contains('active')) return;
+
+                if (isRecording || videoIsRecording) {
+                    showToast("Stop current recording before switching inputs.", "error");
+                    return;
+                }
+                stopAllCameraPreviews();
+
+                document.querySelectorAll('.nav-item').forEach(t=>{
+                    t.classList.remove('active');
+                    t.setAttribute('aria-selected', 'false');
+                });
+                tab.classList.add('active');
+                tab.setAttribute('aria-selected', 'true');
+
+                document.querySelectorAll('.sensor').forEach(p=>p.classList.remove('active-panel'));
+                document.getElementById(tab.dataset.target).classList.add('active-panel');
+            });
+        });
+
+        document.querySelectorAll('.method-btn').forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+                if (btn.classList.contains('active')) return;
+
+                const panelId = btn.dataset.panel;
+                if ((panelId === 'panelAudio' && isRecording) || (panelId === 'panelVideo' && videoIsRecording)) {
+                    showToast("Stop current recording before switching methods.", "error");
+                    return;
+                }
+                stopAllCameraPreviews();
+
+                document.querySelectorAll(`.method-btn[data-panel="${panelId}"]`).forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                document.querySelectorAll(`#${panelId}-record, #${panelId}-upload`).forEach(el => el.classList.remove('active-method'));
+                document.getElementById(`${panelId}-${btn.dataset.method}`).classList.add('active-method');
+            });
+        });
+
+        function wireDropzone(zoneId, inputId){
+            const zone = document.getElementById(zoneId);
+            const input = document.getElementById(inputId);
+            ['dragenter','dragover'].forEach(evt=>{
+                zone.addEventListener(evt, e=>{ e.preventDefault(); zone.classList.add('drag'); });
+            });
+            ['dragleave','drop'].forEach(evt=>{
+                zone.addEventListener(evt, e=>{ e.preventDefault(); zone.classList.remove('drag'); });
+            });
+            zone.addEventListener('drop', e=>{
+                if (e.dataTransfer.files.length){
+                    input.files = e.dataTransfer.files;
+                }
+            });
+        }
+        wireDropzone('dropzone', 'audioFile');
+        wireDropzone('videoDropzone', 'videoFile');
+        wireDropzone('imageDropzone', 'imageFile');
+    </script>
+</body>
+</html>

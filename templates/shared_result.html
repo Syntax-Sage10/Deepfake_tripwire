@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if case %}{{ case.id }} · Tripwire Case Result{% else %}Case Not Found · Tripwire{% endif %}</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D10; --panel:#11161B; --line:#1E262D;
+    --cyan:#00E5A0; --red:#FF3B3B; --text:#E7EDF0; --dim:#6B7680;
+  }
+  body{ margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+        font-family:'JetBrains Mono',monospace; display:flex; align-items:center;
+        justify-content:center; padding:24px; }
+  .card{ width:100%; max-width:480px; background:var(--panel); border:1px solid var(--line);
+         border-radius:12px; padding:28px; }
+  .card.red{ border-color:var(--red); box-shadow:0 0 26px #FF3B3B33; }
+  .card.green{ border-color:var(--cyan); box-shadow:0 0 26px #00E5A033; }
+  h1{ font-size:13px; letter-spacing:.1em; color:var(--dim); margin:0 0 4px; text-transform:uppercase;}
+  .verdict{ font-size:26px; font-weight:700; margin:6px 0 2px; }
+  .verdict.red{ color:var(--red); } .verdict.green{ color:var(--cyan); }
+  .meta{ color:var(--dim); font-size:12px; margin-bottom:18px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  td{ padding:6px 0; border-top:1px solid var(--line); vertical-align:top; }
+  td:first-child{ color:var(--dim); width:42%; }
+  .footer{ margin-top:22px; font-size:11px; color:var(--dim); text-align:center; }
+  .footer a{ color:var(--cyan); text-decoration:none; }
+</style>
+</head>
+<body>
+{% if case %}
+  <div class="card {{ 'red' if case.verdict == 'FAKE' else 'green' }}">
+    <h1>Tripwire Case Result</h1>
+    <div class="meta">{{ case.id }} · {{ (case.type or 'unknown')|upper }}</div>
+    <div class="verdict {{ 'red' if case.verdict == 'FAKE' else 'green' }}">
+      {{ '🔴 FAKE' if case.verdict == 'FAKE' else '🟢 REAL' }} · {{ case.confidence }}%
+    </div>
+    <div class="meta">{{ case.message or '' }}</div>
+    <table>
+      {% for k, v in (case.raw_result or {}).items() %}
+      <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+      {% endfor %}
+    </table>
+    <div class="footer">Shared read-only view · analysis is not re-verifiable from this link ·
+      <a href="/">Run your own check on Tripwire</a></div>
+  </div>
+{% else %}
+  <div class="card">
+    <h1>Tripwire</h1>
+    <div class="verdict">Link not found</div>
+    <div class="meta">This shared case doesn't exist or has expired.</div>
+    <div class="footer"><a href="/">Go to Tripwire</a></div>
+  </div>
+{% endif %}
+</body>
+</html>
