@@ -1,7 +1,7 @@
 import os
 from PIL import Image
 
-from image_classifier import FakeImageClassifier
+from image_classifier import FakeImageClassifier, FAKE_VERDICT_THRESHOLD
 
 
 class ImageTripwire:
@@ -23,7 +23,7 @@ class ImageTripwire:
             size_warning = f"Image is very small ({width}x{height}); result may be unreliable."
 
         fake_prob = self.classifier.score(image)
-        is_deepfake = fake_prob > 0.5
+        is_deepfake = fake_prob > FAKE_VERDICT_THRESHOLD
         confidence = round(max(fake_prob, 1 - fake_prob) * 100, 1)
 
         if verbose:
@@ -47,6 +47,7 @@ class ImageTripwire:
                 "dimensions": f"{width}x{height}",
                 "probability_fake": f"{fake_prob:.4f}",
                 "probability_real": f"{1 - fake_prob:.4f}",
+                "fake_verdict_threshold": f"{FAKE_VERDICT_THRESHOLD:.2f}",
             },
         }
 

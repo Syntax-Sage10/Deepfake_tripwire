@@ -1,9 +1,17 @@
+import os
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 MODEL_NAME = "yaya36095/xlm-roberta-text-detector"
 
 MIN_WORDS_FOR_RELIABLE_READING = 25  # short snippets are noisy for this class of model
+
+# Same rationale as FAKE_VERDICT_THRESHOLD in image_classifier.py: this is a
+# small fine-tuned classifier and can run hot on real-world text that wasn't
+# in its training distribution. 0.6 is a starting point, not a measured
+# calibration - override with TRIPWIRE_TEXT_AI_THRESHOLD once you've seen how
+# it scores your own known-human and known-AI samples.
+AI_VERDICT_THRESHOLD = float(os.environ.get("TRIPWIRE_TEXT_AI_THRESHOLD", "0.6"))
 
 
 class TextTripwire:
@@ -54,7 +62,7 @@ class TextTripwire:
 
         prob_human = float(probs[0][self.human_idx].item())
         prob_ai = float(probs[0][self.ai_idx].item())
-        is_ai = prob_ai > 0.5
+        is_ai = prob_ai > AI_VERDICT_THRESHOLD
         confidence = round(max(prob_human, prob_ai) * 100, 1)
 
         truncated = len(self.tokenizer.encode(text)) > 512
@@ -84,6 +92,7 @@ class TextTripwire:
                 "probability_human": f"{prob_human:.4f}",
                 "probability_ai": f"{prob_ai:.4f}",
                 "truncated_to_512_tokens": str(truncated),
+                "ai_verdict_threshold": f"{AI_VERDICT_THRESHOLD:.2f}",
             },
         }
 

@@ -1,9 +1,12 @@
+import os
 import numpy as np
 import torch
 from PIL import Image
 from transformers import AutoImageProcessor, SiglipForImageClassification
 
 MODEL_NAME = "prithivMLmods/Deepfake-Detect-Siglip2"
+
+FAKE_VERDICT_THRESHOLD = float(os.environ.get("TRIPWIRE_IMAGE_FAKE_THRESHOLD", "0.6"))
 
 
 class FakeImageClassifier:

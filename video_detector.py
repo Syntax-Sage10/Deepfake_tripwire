@@ -2,7 +2,7 @@ import os
 import cv2
 from PIL import Image
 
-from image_classifier import FakeImageClassifier
+from image_classifier import FakeImageClassifier, FAKE_VERDICT_THRESHOLD
 
 DEFAULT_NUM_FRAMES = 8
 MIN_FRAMES_FOR_CONFIDENCE = 3
@@ -74,7 +74,7 @@ class VideoTripwire:
 
         avg_fake = sum(fake_scores) / len(fake_scores)
         max_fake = max(fake_scores)
-        flagged_frame_count = sum(1 for s in fake_scores if s > 0.5)
+        flagged_frame_count = sum(1 for s in fake_scores if s > FAKE_VERDICT_THRESHOLD)
         # Index of the single most-suspicious sampled frame, so the frontend
         # can request/display a Grad-CAM heatmap for that frame specifically
         # rather than an arbitrary one.
@@ -82,7 +82,7 @@ class VideoTripwire:
 
         # Verdict on the average across sampled frames rather than any single
         # frame, so one odd frame (motion blur, lighting) doesn't flip the result.
-        is_deepfake = avg_fake > 0.5
+        is_deepfake = avg_fake > FAKE_VERDICT_THRESHOLD
         confidence = round(max(avg_fake, 1 - avg_fake) * 100, 1)
 
         if verbose:
@@ -119,6 +119,7 @@ class VideoTripwire:
                 "frames_flagged_fake": f"{flagged_frame_count}/{len(frames)}",
                 "avg_fake_probability": f"{avg_fake:.4f}",
                 "max_fake_probability": f"{max_fake:.4f}",
+                "fake_verdict_threshold": f"{FAKE_VERDICT_THRESHOLD:.2f}",
             },
         }
 
