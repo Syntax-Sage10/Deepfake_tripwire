@@ -621,6 +621,12 @@
         .provenance-list{ list-style:none; margin:0; padding:0; font-size:11.5px; color:var(--text); }
         .provenance-list li{ padding:5px 0; border-top:1px solid var(--panel-line); }
         .provenance-list li:first-child{ border-top:none; }
+        .second-opinion-warning{
+            display:flex; align-items:flex-start; gap:8px;
+            font-size:11.5px; line-height:1.5; color:var(--amber);
+            background:var(--amber-dim); border:1px solid var(--amber);
+            border-radius:6px; padding:8px 10px; margin-bottom:10px;
+        }
 
         /* Share link */
         #shareLinkBox{ display:flex; gap:8px; margin-top:10px; }
@@ -896,7 +902,6 @@
         
         .dropzone-label {
             display: block;
-            pointer-events: none; /* Let clicks pass through to input */
         }
         .dropzone input[type=file]{
             font-family:var(--mono);
@@ -1411,6 +1416,14 @@
                 <div class="feature-panel-content">
                     <canvas id="spectrogramCanvas" width="600" height="160" class="spectrogram-canvas"></canvas>
                     <div id="spectrogramStatus" class="hint" style="padding:4px 0 0;"></div>
+                </div>
+            </details>
+
+            <details id="secondOpinionPanel" class="feature-panel hidden" open>
+                <summary class="breakdown-title">// Second Opinion (Signal Analysis)</summary>
+                <div class="feature-panel-content">
+                    <div id="secondOpinionWarning" class="second-opinion-warning hidden"></div>
+                    <ul id="secondOpinionList" class="provenance-list"></ul>
                 </div>
             </details>
 
@@ -2174,6 +2187,7 @@
             renderFacesPanel(data.faces || data.peak_frame_faces);
             renderTimelinePanel(data.frame_timeline);
             renderProvenancePanel(data.provenance);
+            renderSecondOpinionPanel(data);
 
             const verdict = isFake ? 'FAKE' : 'REAL';
             if (isFake) {
@@ -2320,6 +2334,40 @@
         }
 
         // ---------------------------------------------------------------
+        // Second opinion (independent signal-based voice analysis)
+        // ---------------------------------------------------------------
+        function renderSecondOpinionPanel(data){
+            const panel = document.getElementById('secondOpinionPanel');
+            const opinion = data.second_opinion;
+            if (!opinion) {
+                panel.classList.add('hidden');
+                return;
+            }
+            panel.classList.remove('hidden');
+
+            const warningEl = document.getElementById('secondOpinionWarning');
+            if (data.ensemble_warning) {
+                warningEl.textContent = '⚠ ' + data.ensemble_warning;
+                warningEl.classList.remove('hidden');
+            } else {
+                warningEl.classList.add('hidden');
+            }
+
+            const verdictLabel = opinion.verdict === 'RED_SPOOF' ? 'AI-generated' : 'Human / authentic';
+            const rows = [
+                `Verdict: ${verdictLabel} (${opinion.confidence_percent}%)`,
+                `Agrees with primary model: ${opinion.agrees_with_primary ? 'Yes' : 'No'}`,
+            ];
+            if (opinion.detected_anomalies && opinion.detected_anomalies.length) {
+                rows.push(`Flagged signal anomalies: ${opinion.detected_anomalies.join(', ')}`);
+            } else {
+                rows.push('Flagged signal anomalies: none');
+            }
+            document.getElementById('secondOpinionList').innerHTML =
+                rows.map(line => `<li>${line}</li>`).join('');
+        }
+
+        // ---------------------------------------------------------------
         // Metadata / C2PA provenance panel
         // ---------------------------------------------------------------
         function renderProvenancePanel(prov){
@@ -2334,7 +2382,7 @@
         }
 
         function hideAllFeaturePanels(){
-            ['gaugeWrap','heatmapPanel','facesPanel','timelinePanel','provenancePanel','spectrogramPanel'].forEach(id => {
+            ['gaugeWrap','heatmapPanel','facesPanel','timelinePanel','provenancePanel','spectrogramPanel','secondOpinionPanel'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) el.classList.add('hidden');
             });
