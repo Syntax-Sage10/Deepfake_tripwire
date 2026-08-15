@@ -1,12 +1,15 @@
 import os
+os.environ["HF_HOME"] = r"C:\Users\prana_pxjt9u2\Deepfake voice\model_cache"
+os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
+
 import sys
 import time
 import shutil
 import base64
 import subprocess
 import threading
-import webbrowser
 import uuid
+import webbrowser
 from io import BytesIO
 
 from flask import Flask, render_template, request, jsonify, abort

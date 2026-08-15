@@ -13,8 +13,8 @@ class NeuralVoiceTripwire:
     def __init__(self, model_name: str = MODEL_NAME, device: str = None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[NeuralVoiceTripwire] Loading {model_name} on {self.device} ...")
-        self.model = AutoModelForAudioClassification.from_pretrained(model_name)
-        self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_name)
+        self.model = AutoModelForAudioClassification.from_pretrained(model_name, local_files_only=True)
+        self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_name, local_files_only=True)
         self.model.to(self.device)
         self.model.eval()
         print("[NeuralVoiceTripwire] Model loaded.")

@@ -1,7 +1,3 @@
-"""Model: prithivMLmods/Deepfake-Detect-Siglip2 (Apache-2.0)
-https://huggingface.co/prithivMLmods/Deepfake-Detect-Siglip2"""
-
-
 import numpy as np
 import torch
 from PIL import Image
@@ -14,17 +10,15 @@ class FakeImageClassifier:
     def __init__(self, model_name: str = MODEL_NAME, device: str = None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[FakeImageClassifier] Loading {model_name} on {self.device} ...")
-        self.model = SiglipForImageClassification.from_pretrained(model_name)
-        self.processor = AutoImageProcessor.from_pretrained(model_name)
+        self.model = SiglipForImageClassification.from_pretrained(model_name, local_files_only=True)
+        self.processor = AutoImageProcessor.from_pretrained(model_name, local_files_only=True)
         self.model.to(self.device)
         self.model.eval()
-        # id2label from the model config; fall back to documented mapping if missing
         self.id2label = self.model.config.id2label or {0: "Fake", 1: "Real"}
         self.fake_idx = next((i for i, l in self.id2label.items() if str(l).lower() == "fake"), 0)
         print("[FakeImageClassifier] Model loaded.")
 
     def score(self, pil_image) -> float:
-        """Returns P(fake) for a single PIL image, in [0, 1]."""
         inputs = self.processor(images=pil_image, return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
@@ -46,8 +40,6 @@ class FakeImageClassifier:
             hidden.retain_grad()
             captured["patch_tokens"] = hidden
 
-        # Hook the final encoder layer so we capture patch-token embeddings
-        # right before the post-layernorm/pooling head.
         last_layer = vision_model.encoder.layers[-1]
         handle = last_layer.register_forward_hook(_capture_hook)
 
@@ -62,18 +54,16 @@ class FakeImageClassifier:
             if patch_tokens is None or patch_tokens.grad is None:
                 return self.score(pil_image), None
 
-            grads = patch_tokens.grad[0]        # (num_patches, hidden_dim)
-            activations = patch_tokens[0].detach()  # (num_patches, hidden_dim)
+            grads = patch_tokens.grad[0]
+            activations = patch_tokens[0].detach()
 
-            weights = grads.mean(dim=-1)        # (num_patches,) - Grad-CAM channel weights, GAP'd
-            cam = (weights.unsqueeze(-1) * activations).sum(dim=-1)  # (num_patches,)
+            weights = grads.mean(dim=-1)
+            cam = (weights.unsqueeze(-1) * activations).sum(dim=-1)
             cam = torch.relu(cam)
 
             num_patches = cam.shape[0]
             side = int(round(num_patches ** 0.5))
             if side * side != num_patches:
-                # Non-square patch grid (unexpected for this model) - bail
-                # out gracefully rather than reshape into something wrong.
                 return self.score(pil_image), None
 
             cam = cam.reshape(side, side)
@@ -100,12 +90,10 @@ class FakeImageClassifier:
         gray = np.asarray(small).astype(np.float32) / 255.0
         gray = np.clip(gray, 0.0, 1.0)
 
-        # Simple red->yellow ramp (low->high) instead of pulling in a full
-        # colormap dependency like matplotlib.
         r = np.full_like(gray, 255)
         g = (gray * 255).astype(np.uint8)
         b = np.zeros_like(gray, dtype=np.uint8)
-        a = (gray * 200).astype(np.uint8)  # fades out where activation is low
+        a = (gray * 200).astype(np.uint8)
 
         rgba = np.stack([r.astype(np.uint8), g, b, a], axis=-1)
         return Image.fromarray(rgba, mode="RGBA")
