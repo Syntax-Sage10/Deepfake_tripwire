@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from image_classifier import FakeImageClassifier
+from image_classifier import FakeImageClassifier, FAKE_VERDICT_THRESHOLD
 
 # Faces smaller than this (in px, on the longest side of the crop's bbox)
 # are usually too low-resolution for the classifier to say anything
@@ -63,7 +63,7 @@ class MultiFaceAnalyzer:
                 "index": i,
                 "box": {"x": x, "y": y, "w": w, "h": h},
                 "probability_fake": round(fake_prob, 4),
-                "verdict": "RED_SPOOF" if fake_prob > 0.5 else "GREEN_HUMAN",
+                "verdict": "RED_SPOOF" if fake_prob > FAKE_VERDICT_THRESHOLD else "GREEN_HUMAN",
                 "confidence_percent": round(max(fake_prob, 1 - fake_prob) * 100, 1),
                 "low_resolution_warning": min(w, h) < MIN_RELIABLE_FACE_PX,
             })
