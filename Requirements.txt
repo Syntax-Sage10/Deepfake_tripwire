@@ -1,0 +1,19 @@
+# Web server
+flask>=3.0
+werkzeug>=3.0
+
+# ML models / inference
+# torch: install the build matching your platform/CUDA version - see
+# https://pytorch.org/get-started/locally/ - the plain "torch" below
+# pulls a CPU-only build on most systems if installed via plain pip.
+torch>=2.2
+transformers>=4.40
+
+# Image / video
+pillow>=10.0
+opencv-python>=4.9
+numpy>=1.26
+
+# Audio
+librosa>=0.10
+soundfile>=0.12
