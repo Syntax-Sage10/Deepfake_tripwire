@@ -130,7 +130,6 @@ def _audio_ensemble_analyze(file_path):
     try:
         signal_result = signal_voice_analyzer.analyze(file_path, verbose=True)
     except Exception as e:
-
         print(f"[!] signal-based second opinion failed (non-fatal): {e}")
         signal_result = None
 
@@ -336,7 +335,7 @@ def launch_app_window(url, delay=1.5):
         browser_path = _find_chromium_browser()
         if browser_path:
             try:
-                subprocess.Popen([browser_path, f"--app={url}", "--window-size=480,900"])
+                subprocess.Popen([browser_path, f"--app={url}", "--window-size=1100,850"])
                 return
             except Exception as e:
                 print(f"[!] Could not open app-mode window ({e}); falling back to a normal browser tab.")
@@ -348,4 +347,4 @@ DEBUG_MODE = os.environ.get("TRIPWIRE_DEBUG", "0") == "1"
 
 if __name__ == "__main__":
     launch_app_window(APP_URL)
-    app.run(host="127.0.0.1", port=5000, debug=DEBUG_MODE, use_reloader=False)
+    app.run(host="127.0.0.1", port=5000, debug=DEBUG_MODE, use_reloader=False)        
