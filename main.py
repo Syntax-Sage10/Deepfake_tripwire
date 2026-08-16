@@ -53,6 +53,41 @@ os.makedirs(TEMP_VIDEO_DIR, exist_ok=True)
 TEMP_IMAGE_DIR = "temp_image"
 os.makedirs(TEMP_IMAGE_DIR, exist_ok=True)
 
+TEMP_TEXT_DIR = "temp_text"
+os.makedirs(TEMP_TEXT_DIR, exist_ok=True)
+
+# Extensions accepted by /analyze-text-file. .doc (legacy binary Word) is
+# deliberately excluded - reliably parsing it needs extra system deps
+# (antiword/textract) that aren't worth pulling in for this.
+ALLOWED_TEXT_EXTENSIONS = {".txt", ".md", ".markdown", ".csv", ".pdf", ".docx"}
+
+
+def _extract_text_from_file(file_path: str, ext: str) -> str:
+    ext = ext.lower()
+
+    if ext in (".txt", ".md", ".markdown", ".csv"):
+        with open(file_path, "rb") as f:
+            raw = f.read()
+        return raw.decode("utf-8", errors="replace")
+
+    if ext == ".pdf":
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            raise RuntimeError("Reading .pdf files requires the 'pypdf' package (pip install pypdf).")
+        reader = PdfReader(file_path)
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+
+    if ext == ".docx":
+        try:
+            import docx
+        except ImportError:
+            raise RuntimeError("Reading .docx files requires the 'python-docx' package (pip install python-docx).")
+        document = docx.Document(file_path)
+        return "\n".join(p.text for p in document.paragraphs)
+
+    raise ValueError(f"Unsupported file type '{ext}'.")
+
 
 def _verdict_payload(results, extra: dict = None):
     is_fake = results["verdict"] == "RED_SPOOF"
@@ -261,6 +296,43 @@ def view_shared_case(share_id):
     return render_template("shared_result.html", case=payload)
 
 
+@app.route("/analyze-text-file", methods=["POST"])
+def analyze_text_file():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file received"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Empty file submitted"}), 400
+
+    original_filename = secure_filename(file.filename)
+    ext = os.path.splitext(original_filename)[1].lower()
+    if ext not in ALLOWED_TEXT_EXTENSIONS:
+        supported = ", ".join(sorted(ALLOWED_TEXT_EXTENSIONS))
+        return jsonify({"error": f"Unsupported file type '{ext}'. Supported: {supported}"}), 400
+
+    temp_file_path = os.path.join(TEMP_TEXT_DIR, f"text_{uuid.uuid4().hex}{ext}")
+    file.save(temp_file_path)
+
+    try:
+        extracted_text = _extract_text_from_file(temp_file_path, ext)
+        if not extracted_text or not extracted_text.strip():
+            return jsonify({"error": "No readable text could be extracted from this file."}), 400
+
+        results = text_analyzer.analyze(extracted_text)
+        extra = {
+            "source_filename": original_filename,
+            "extracted_word_count": len(extracted_text.split()),
+        }
+        return jsonify(_verdict_payload(results, extra))
+    except Exception as e:
+        print(f"\n[!] text-file backend error: {str(e)}\n")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+
 @app.route("/healthz", methods=["GET"])
 def healthz():
     return jsonify({"status": "ok"})
@@ -347,4 +419,4 @@ DEBUG_MODE = os.environ.get("TRIPWIRE_DEBUG", "0") == "1"
 
 if __name__ == "__main__":
     launch_app_window(APP_URL)
-    app.run(host="127.0.0.1", port=5000, debug=DEBUG_MODE, use_reloader=False)        
+    app.run(host="127.0.0.1", port=5000, debug=DEBUG_MODE, use_reloader=False)
