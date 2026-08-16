@@ -31,7 +31,7 @@
             --amber:#FFB020;
             --amber-dim:#FFB02033;
             --text:#E7EDF0;
-            --text-dim:#6B7680;
+            --text-dim:#828D97;
             --mono:'JetBrains Mono', monospace;
             --display:'Big Shoulders Display', sans-serif;
         }
@@ -1073,11 +1073,20 @@
         #resultBox.armed-red{ border-color:var(--red); animation:trip .4s ease; box-shadow:0 0 30px var(--red-dim); }
         #resultBox.armed-green{ border-color:var(--cyan); box-shadow:0 0 30px var(--cyan-dim); }
 
+        .result-eyebrow{
+            font-size:10px; font-weight:700; letter-spacing:.18em;
+            color:var(--text-dim); margin-bottom:8px; text-transform:uppercase;
+            opacity:.85;
+        }
+        #resultBox.armed-red .result-eyebrow{ color:var(--red); }
+        #resultBox.armed-green .result-eyebrow{ color:var(--cyan); }
+
         #resultMessage{
             font-family:var(--display);
             font-weight:900;
             text-transform:uppercase;
-            font-size:22px;
+            font-size:24px;
+            line-height:1.05;
             letter-spacing:-.01em;
             margin:0 0 12px;
         }
@@ -1169,22 +1178,28 @@
         @media (max-width:640px){
             .workspace{ flex-direction:column; }
             .sidebar{
-                flex-direction:row;
-                flex-wrap:wrap;
+                display:grid;
+                grid-template-columns:repeat(4, 1fr);
+                gap:6px;
                 width:100%;
             }
             .nav-item{
-                flex:1 1 30%;
                 flex-direction:column;
                 justify-content:center;
                 text-align:center;
                 border-left:none;
                 border-top:3px solid transparent;
                 gap:6px;
-                padding:10px 6px;
+                padding:10px 4px;
             }
             .nav-item.active{ border-left-color:transparent; border-top-color:var(--cyan); }
-            .nav-item .label .name{ white-space:normal; }
+            .nav-item .label .name{ white-space:normal; font-size:10.5px; }
+        }
+
+        @media (max-width:400px){
+            .hero-marketing{ padding-top:40px; }
+            .nav-item .icon{ width:16px; height:16px; }
+            .method-btn{ font-size:9.5px; padding:8px 6px; }
         }
     </style>
 </head>
@@ -1401,11 +1416,31 @@
 
                 <div class="sensor" id="panelText" role="tabpanel" aria-labelledby="tabBtnText">
                     <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
-                    <form id="textForm">
-                        <textarea id="textInput" placeholder="Paste text here to check whether it reads as human-written or AI-generated..." rows="6"></textarea>
-                        <p class="hint" id="wordCountHint">0 words — 25+ recommended for a reliable reading</p>
-                        <button type="submit">Analyze Text</button>
-                    </form>
+
+                    <div class="method-toggle">
+                        <button type="button" class="method-btn active" data-panel="panelText" data-method="paste">Paste</button>
+                        <button type="button" class="method-btn" data-panel="panelText" data-method="upload">Upload</button>
+                    </div>
+
+                    <div class="method-body active-method" id="panelText-paste">
+                        <form id="textForm">
+                            <textarea id="textInput" placeholder="Paste text here to check whether it reads as human-written or AI-generated..." rows="6"></textarea>
+                            <p class="hint" id="wordCountHint">0 words — 25+ recommended for a reliable reading</p>
+                            <button type="submit">Analyze Text</button>
+                        </form>
+                    </div>
+
+                    <div class="method-body" id="panelText-upload">
+                        <form id="textFileForm">
+                            <div class="dropzone" id="textDropzone" data-default-msg="Drag & drop a .txt, .md, .pdf, or .docx file here or click to browse">
+                                <span class="dropzone-label">
+                                    <input type="file" id="textFile" accept=".txt,.md,.markdown,.csv,.pdf,.docx"/>
+                                </span>
+                            </div>
+                            <p class="hint" id="textFileHint">Text is extracted from the file and read the same way as pasted text (25+ words recommended).</p>
+                            <button type="submit">Analyze File</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1439,6 +1474,7 @@
         <div id="batchResultsContainer"></div>
 
         <div id="resultBox" class="hidden">
+            <div class="result-eyebrow">// VERDICT</div>
             <h2 id="resultMessage"></h2>
 
             <div id="gaugeWrap" class="gauge-wrap hidden">
@@ -2095,7 +2131,7 @@
         const uploadProgressText = document.getElementById('uploadProgressText');
         const uploadProgressFill = document.getElementById('uploadProgressFill');
 
-        const MAX_UPLOAD_MB = { audio: 25, video: 300, image: 15 };
+        const MAX_UPLOAD_MB = { audio: 25, video: 300, image: 15, text: 15 };
 
         function validateFileSize(file, kind, label){
             const maxMB = MAX_UPLOAD_MB[kind];
@@ -2203,7 +2239,8 @@
 
             card.innerHTML = `
                 <div class="batch-filename-header">📁 FILE: ${filename}</div>
-                <h2 style="font-family:var(--display); font-weight:900; text-transform:uppercase; font-size:22px; margin:0 0 12px; color:${isFake ? 'var(--red)' : 'var(--cyan)'};">${data.message}</h2>
+                <div class="result-eyebrow" style="color:${isFake ? 'var(--red)' : 'var(--cyan)'};">// VERDICT</div>
+                <h2 style="font-family:var(--display); font-weight:900; text-transform:uppercase; font-size:24px; line-height:1.05; margin:0 0 12px; color:${isFake ? 'var(--red)' : 'var(--cyan)'};">${data.message}</h2>
                 
                 <div class="gauge-wrap" style="margin: 16px 0;">
                     <svg viewBox="0 0 200 120" class="gauge-svg">
@@ -2463,6 +2500,17 @@
             }, 'text');
         });
 
+        document.getElementById('textFileForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('textFile');
+            if (fileInput.files.length === 0) {
+                showToast("Please select a file first.", "error");
+                return;
+            }
+            document.getElementById('batchResultsContainer').innerHTML = '';
+            sendFileToBackendSync('/analyze-text-file', fileInput.files[0], fileInput.files[0].name, 'text');
+        });
+
         let mediaRecorder;
         let audioChunks = [];
         let isRecording = false;
@@ -2711,7 +2759,7 @@
                 document.querySelectorAll(`.method-btn[data-panel="${panelId}"]`).forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
 
-                document.querySelectorAll(`#${panelId}-record, #${panelId}-upload`).forEach(el => el.classList.remove('active-method'));
+                document.querySelectorAll(`[id^="${panelId}-"]`).forEach(el => el.classList.remove('active-method'));
                 document.getElementById(`${panelId}-${btn.dataset.method}`).classList.add('active-method');
             });
         });
@@ -2759,6 +2807,7 @@
         wireDropzone('dropzone', 'audioFile');
         wireDropzone('videoDropzone', 'videoFile');
         wireDropzone('imageDropzone', 'imageFile');
+        wireDropzone('textDropzone', 'textFile');
     </script>
 </body>
 </html>
