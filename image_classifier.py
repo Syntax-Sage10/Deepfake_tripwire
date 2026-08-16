@@ -1,24 +1,38 @@
 import os
+import os
 import numpy as np
 import torch
 from PIL import Image
 from transformers import AutoImageProcessor, SiglipForImageClassification
 
-MODEL_NAME = "prithivMLmods/Deepfake-Detect-Siglip2"
+MODEL_NAME = os.environ.get("TRIPWIRE_IMAGE_MODEL", "Ateeqq/ai-vs-human-image-detector")
 
 FAKE_VERDICT_THRESHOLD = float(os.environ.get("TRIPWIRE_IMAGE_FAKE_THRESHOLD", "0.6"))
+
+_FAKE_LABEL_SYNONYMS = {"fake", "ai", "ai-generated", "artificial", "synthetic", "generated", "deepfake"}
 
 
 class FakeImageClassifier:
     def __init__(self, model_name: str = MODEL_NAME, device: str = None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[FakeImageClassifier] Loading {model_name} on {self.device} ...")
-        self.model = SiglipForImageClassification.from_pretrained(model_name, local_files_only=True)
-        self.processor = AutoImageProcessor.from_pretrained(model_name, local_files_only=True)
+        self.model = SiglipForImageClassification.from_pretrained(model_name, local_files_only=False)
+        self.processor = AutoImageProcessor.from_pretrained(model_name, local_files_only=False)
         self.model.to(self.device)
         self.model.eval()
         self.id2label = self.model.config.id2label or {0: "Fake", 1: "Real"}
-        self.fake_idx = next((i for i, l in self.id2label.items() if str(l).lower() == "fake"), 0)
+        self.fake_idx = next(
+            (i for i, l in self.id2label.items() if str(l).lower() in _FAKE_LABEL_SYNONYMS),
+            0,
+        )
+        if str(self.id2label.get(self.fake_idx, "")).lower() not in _FAKE_LABEL_SYNONYMS:
+            print(
+                f"[FakeImageClassifier] ⚠ Could not confidently resolve the 'fake' label from "
+                f"id2label={self.id2label!r}; defaulting to index {self.fake_idx}. "
+                f"Verify this against a known-fake and known-real sample."
+            )
+        print(f"[FakeImageClassifier] Label mapping resolved: fake=idx{self.fake_idx} "
+              f"(raw id2label={self.id2label!r})")
         print("[FakeImageClassifier] Model loaded.")
 
     def score(self, pil_image) -> float:
