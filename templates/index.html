@@ -608,6 +608,9 @@
         .timeline-legend .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
 
         .spectrogram-canvas{ width:100%; height:auto; background:#05070a; border:1px solid var(--panel-line); border-radius: 4px; display:block; }
+        .media-preview-player{ display:block; width:100%; max-width:420px; margin:0 auto; border-radius:4px; }
+        video.media-preview-player{ max-height:360px; background:#000; border:1px solid var(--panel-line); }
+        .audio-preview-player{ max-width:100%; margin:0 0 10px; height:36px; }
 
         .provenance-list{ list-style:none; margin:0; padding:0; font-size:11.5px; color:var(--text); }
         .provenance-list li{ padding:5px 0; border-top:1px solid var(--panel-line); }
@@ -1486,6 +1489,13 @@
                 <div id="gaugeLabel" class="gauge-label">CONFIDENCE</div>
             </div>
 
+            <details id="videoPreviewPanel" class="feature-panel hidden" open>
+                <summary class="breakdown-title">// Analyzed Clip</summary>
+                <div class="feature-panel-content">
+                    <video id="videoPreviewPlayer" class="media-preview-player" controls playsinline></video>
+                </div>
+            </details>
+
             <details id="heatmapPanel" class="feature-panel hidden" open>
                 <summary class="breakdown-title">// Visual Heatmap (Grad-CAM, patch resolution)</summary>
                 <div class="feature-panel-content">
@@ -1521,6 +1531,7 @@
             <details id="spectrogramPanel" class="feature-panel hidden" open>
                 <summary class="breakdown-title">// Audio Waveform</summary>
                 <div class="feature-panel-content">
+                    <audio id="audioPreviewPlayer" class="media-preview-player audio-preview-player" controls></audio>
                     <canvas id="spectrogramCanvas" width="600" height="160" class="spectrogram-canvas"></canvas>
                     <div id="spectrogramStatus" class="hint" style="padding:4px 0 0;"></div>
                 </div>
@@ -1932,14 +1943,28 @@
         }
 
         let currentCase = null;
+        let lastAnalyzedBlob = null;
         function beginNewCase(type){
             const id = 'CASE #' + Math.floor(1000 + Math.random() * 9000);
             document.getElementById('caseId').textContent = id;
             currentCase = { id, type, timestamp: Date.now() };
-            
+
             const sticky = document.getElementById('stickySummary');
             sticky.classList.remove('visible');
-            
+
+            // Clear any media preview left over from the previous case so a
+            // stale image/video/waveform doesn't linger while this one runs.
+            ['videoPreviewPanel', 'heatmapPanel', 'spectrogramPanel'].forEach(pid => {
+                const panel = document.getElementById(pid);
+                if (panel) panel.classList.add('hidden');
+            });
+            const videoPlayer = document.getElementById('videoPreviewPlayer');
+            if (videoPlayer) { videoPlayer.pause(); videoPlayer.removeAttribute('src'); videoPlayer.load(); }
+            const audioPlayer = document.getElementById('audioPreviewPlayer');
+            if (audioPlayer) { audioPlayer.pause(); audioPlayer.removeAttribute('src'); audioPlayer.load(); }
+            const overlayImg = document.getElementById('heatmapOverlay');
+            if (overlayImg) overlayImg.removeAttribute('src');
+
             return currentCase;
         }
 
@@ -2205,7 +2230,91 @@
             document.getElementById('shareLinkBox').classList.add('hidden');
             
             updateStickySummary(isFake, data.confidence, data.message);
+            renderMediaPreview((currentCase && currentCase.type) || null, data);
         }
+
+        function renderMediaPreview(mode, data){
+            // --- Image / video peak-frame: show the actual captured frame,
+            // with the Grad-CAM overlay layered on top if the backend sent one.
+            if (data.image_preview || data.peak_frame_preview) {
+                const panel = document.getElementById('heatmapPanel');
+                const base = document.getElementById('heatmapBase');
+                const overlay = document.getElementById('heatmapOverlay');
+                base.src = data.image_preview || data.peak_frame_preview;
+                if (data.heatmap_overlay) {
+                    overlay.src = data.heatmap_overlay;
+                    overlay.style.display = document.getElementById('heatmapToggle').checked ? 'block' : 'none';
+                } else {
+                    overlay.removeAttribute('src');
+                    overlay.style.display = 'none';
+                }
+                panel.classList.remove('hidden');
+            }
+
+            // --- Video: a playable copy of the exact clip that was analyzed ---
+            if (mode === 'video' && lastAnalyzedBlob) {
+                const panel = document.getElementById('videoPreviewPanel');
+                const player = document.getElementById('videoPreviewPlayer');
+                player.src = URL.createObjectURL(lastAnalyzedBlob);
+                panel.classList.remove('hidden');
+            }
+
+            // --- Audio / mic: waveform + a playable copy of the exact clip analyzed ---
+            if ((mode === 'audio' || mode === 'mic') && lastAnalyzedBlob) {
+                const panel = document.getElementById('spectrogramPanel');
+                const audioPlayer = document.getElementById('audioPreviewPlayer');
+                audioPlayer.src = URL.createObjectURL(lastAnalyzedBlob);
+                panel.classList.remove('hidden');
+                drawWaveform(lastAnalyzedBlob);
+            }
+        }
+
+        async function drawWaveform(blob){
+            const canvas = document.getElementById('spectrogramCanvas');
+            const status = document.getElementById('spectrogramStatus');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            status.textContent = '> decoding audio...';
+
+            let audioCtx;
+            try {
+                const arrayBuffer = await blob.arrayBuffer();
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                const raw = audioBuffer.getChannelData(0);
+
+                const samples = canvas.width;
+                const blockSize = Math.max(1, Math.floor(raw.length / samples));
+                const mid = canvas.height / 2;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = 'rgba(0, 229, 160, 0.9)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (let i = 0; i < samples; i++) {
+                    const start = i * blockSize;
+                    let min = 1.0, max = -1.0;
+                    for (let j = 0; j < blockSize && (start + j) < raw.length; j++) {
+                        const v = raw[start + j];
+                        if (v < min) min = v;
+                        if (v > max) max = v;
+                    }
+                    ctx.moveTo(i + 0.5, mid + min * mid * 0.95);
+                    ctx.lineTo(i + 0.5, mid + max * mid * 0.95);
+                }
+                ctx.stroke();
+                status.textContent = `> ${audioBuffer.duration.toFixed(2)}s · ${audioBuffer.sampleRate} Hz`;
+            } catch (err) {
+                console.warn('Waveform draw failed:', err);
+                status.textContent = "> waveform unavailable for this file's format (playback above still works)";
+            } finally {
+                if (audioCtx) audioCtx.close();
+            }
+        }
+
+        document.getElementById('heatmapToggle').addEventListener('change', (e) => {
+            document.getElementById('heatmapOverlay').style.display = e.target.checked ? 'block' : 'none';
+        });
 
         const GAUGE_ARC_LENGTH = 251.2;
         function renderGauge(confidencePct, isFake){
@@ -2423,6 +2532,7 @@
 
         function sendFileToBackendSync(url, file, filename, mode) {
             beginNewCase(mode);
+            lastAnalyzedBlob = file;
             document.getElementById('batchResultsContainer').innerHTML = '';
             resultBox.classList.add('hidden');
             resultBox.className = 'hidden';
