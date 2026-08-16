@@ -18,8 +18,7 @@ MIN_FRAMES_FOR_CONFIDENCE = 3
 VIDEO_FAKE_VERDICT_THRESHOLD = float(os.environ.get("TRIPWIRE_VIDEO_FAKE_THRESHOLD", "0.65"))
 
 # Hard cap on frames scanned per pass, so a very long video can't hang the
-# request indefinitely. ~200s at 30fps / ~500s at 12fps. Override via env if
-# you routinely analyze longer clips.
+# request indefinitely. ~200s at 30fps / ~500s at 12fps. 
 MAX_FRAMES_TO_SCAN = int(os.environ.get("TRIPWIRE_VIDEO_MAX_SCAN_FRAMES", "6000"))
 
 
@@ -28,19 +27,6 @@ class VideoTripwire:
         self.classifier = classifier or FakeImageClassifier()
 
     def _extract_frames(self, file_path: str, num_frames: int):
-        # NOTE: this deliberately never uses cap.set(CAP_PROP_POS_FRAMES, ...)
-        # or trusts cap.get(CAP_PROP_FRAME_COUNT). Both are unreliable for
-        # "streaming-style" containers that lack a finalized seek index -
-        # notably .webm files produced by the browser's MediaRecorder API
-        # (used by this app's own webcam "Record" video option), which is
-        # written incrementally rather than finalized with a proper Cues/
-        # duration block. On files like that, CAP_PROP_FRAME_COUNT can come
-        # back as 0, negative, or just wrong, and cap.set() silently fails to
-        # seek - every cap.read() afterward returns False, which is exactly
-        # what produced the "no readable frames" error. Reading sequentially
-        # from the start (twice: once to count, once to pull the frames we
-        # actually want) works regardless of container/index quality, at the
-        # cost of decoding the file twice instead of once.
         cap = cv2.VideoCapture(file_path)
         if not cap.isOpened():
             raise ValueError(
