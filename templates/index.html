@@ -2192,6 +2192,8 @@
             const container = document.getElementById('batchResultsContainer');
             const card = document.createElement('div');
             const isFake = data.is_deepfake;
+            const confidence = data.confidence || 0;
+            const offset = 251.2 * (1 - Math.max(0, Math.min(100, confidence)) / 100);
             card.className = `batch-result-card ${isFake ? 'armed-red' : 'armed-green'}`;
 
             let rawText = "";
@@ -2202,6 +2204,16 @@
             card.innerHTML = `
                 <div class="batch-filename-header">📁 FILE: ${filename}</div>
                 <h2 style="font-family:var(--display); font-weight:900; text-transform:uppercase; font-size:22px; margin:0 0 12px; color:${isFake ? 'var(--red)' : 'var(--cyan)'};">${data.message}</h2>
+                
+                <div class="gauge-wrap" style="margin: 16px 0;">
+                    <svg viewBox="0 0 200 120" class="gauge-svg">
+                        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1E262D" stroke-width="14" stroke-linecap="round"></path>
+                        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="${isFake ? '#FF3B3B' : '#00E5A0'}" stroke-width="14" stroke-linecap="round" stroke-dasharray="251.2" stroke-dashoffset="${offset}"></path>
+                        <text x="100" y="92" text-anchor="middle" class="gauge-value" fill="var(--text)">${confidence.toFixed(1)}%</text>
+                    </svg>
+                    <div class="gauge-label">${isFake ? 'CONFIDENCE — LIKELY AI' : 'CONFIDENCE — LIKELY AUTHENTIC'}</div>
+                </div>
+
                 <div style="font-family:var(--mono); font-size:11px; line-height:1.7; color:var(--text-dim); background:#0A0D10; border:1px solid var(--panel-line); border-radius:4px; padding:12px; white-space: pre-wrap;">${rawText}</div>
             `;
             container.appendChild(card);
