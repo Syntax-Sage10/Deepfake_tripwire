@@ -1,9 +1,4 @@
 import os
-
-# Model cache location. Respects an existing HF_HOME if the environment
-# already sets one (e.g. in a deployed/containerized setup); otherwise
-# falls back to a "model_cache" folder next to this file, so the app
-# doesn't ship with a path that only works on one developer's machine.
 os.environ.setdefault(
     "HF_HOME",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_cache"),
@@ -31,20 +26,12 @@ from image_detector import ImageTripwire
 from text_detector import TextTripwire
 from face_detector import MultiFaceAnalyzer
 from provenance import check_image_provenance
-# Signal-based (non-neural) voice analyzer, used as a second opinion
-# alongside the neural model below. NOTE: this lives in test.py, whose
-# name shadows the stdlib `test` package - that's harmless here because
-# Python puts this script's own directory first on sys.path, but if this
-# file is ever imported as a library rather than run directly, prefer
-# renaming test.py to something like signal_voice_detector.py.
+
 from test import ComprehensiveVoiceTripwire
 import shared_store
 
 app = Flask(__name__)
 
-# Cap request bodies so a client (or someone bypassing the frontend and
-# hitting the API directly) can't send an arbitrarily large upload.
-# Override with the TRIPWIRE_MAX_UPLOAD_MB env var if needed.
 app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("TRIPWIRE_MAX_UPLOAD_MB", "100")) * 1024 * 1024
 
 audio_analyzer = NeuralVoiceTripwire()
@@ -94,9 +81,6 @@ def _verdict_payload(results, extra: dict = None):
     if extra:
         payload.update(extra)
 
-    # Optional second-opinion / ensemble info attached by an analyzer
-    # function (see _audio_ensemble_analyze). Pulled out separately so
-    # callers don't need to know about this key.
     ensemble_extra = results.get("_ensemble_extra")
     if ensemble_extra:
         payload.update(ensemble_extra)
@@ -140,23 +124,13 @@ def _handle_file_upload(temp_dir, prefix, default_ext, analyzer_fn):
 
 
 def _audio_ensemble_analyze(file_path):
-    """Runs the primary neural voice model, then cross-checks it against
-    the independent signal-based analyzer (jitter/shimmer/HNR/phase/
-    flatness) in test.py. The neural model's verdict stays authoritative
-    for the headline result, but when the two disagree we surface that
-    to the user - a single black-box confidence score can look equally
-    confident whether it's right or wrong, so a second, differently-built
-    detector disagreeing is a meaningful trust signal on its own.
-    """
     neural_result = audio_analyzer.analyze(file_path, verbose=True)
 
     ensemble_extra = {}
     try:
         signal_result = signal_voice_analyzer.analyze(file_path, verbose=True)
     except Exception as e:
-        # Non-fatal: the neural result still stands on its own if the
-        # signal-based pass fails for any reason (e.g. a clip too short
-        # for pyin's F0 tracking).
+
         print(f"[!] signal-based second opinion failed (non-fatal): {e}")
         signal_result = None
 
@@ -290,9 +264,6 @@ def view_shared_case(share_id):
 
 @app.route("/healthz", methods=["GET"])
 def healthz():
-    """Lightweight liveness check for process managers / load balancers.
-    Deliberately doesn't touch the models or filesystem - just confirms
-    the process is up and able to serve requests."""
     return jsonify({"status": "ok"})
 
 
@@ -373,10 +344,6 @@ def launch_app_window(url, delay=1.5):
 
     threading.Thread(target=_open, daemon=True).start()
 
-
-# Debug mode enables Flask's interactive debugger, which allows arbitrary
-# code execution if the dev server is ever reachable beyond localhost.
-# Off by default; opt in explicitly for local development.
 DEBUG_MODE = os.environ.get("TRIPWIRE_DEBUG", "0") == "1"
 
 if __name__ == "__main__":
