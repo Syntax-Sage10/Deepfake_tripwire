@@ -2,10 +2,25 @@ import os
 import cv2
 from PIL import Image
 
-from image_classifier import FakeImageClassifier, FAKE_VERDICT_THRESHOLD
+from image_classifier import FakeImageClassifier
 
 DEFAULT_NUM_FRAMES = 8
 MIN_FRAMES_FOR_CONFIDENCE = 3
+
+# Video frames go through the same underlying image classifier as standalone
+# photos, but video-codec compression artifacts (block boundaries, motion
+# blur, lower bitrate on webcam recordings especially) can look different
+# to the model than a clean photo does - so video frequently needs its own,
+# separately-tuned threshold rather than reusing the image one. 0.65 is a
+# starting point (a bit higher than the image default of 0.6, on the
+# assumption video runs hotter) - override with TRIPWIRE_VIDEO_FAKE_THRESHOLD
+# once you've seen actual avg_fake_probability numbers from your own clips.
+VIDEO_FAKE_VERDICT_THRESHOLD = float(os.environ.get("TRIPWIRE_VIDEO_FAKE_THRESHOLD", "0.65"))
+
+# Hard cap on frames scanned per pass, so a very long video can't hang the
+# request indefinitely. ~200s at 30fps / ~500s at 12fps. Override via env if
+# you routinely analyze longer clips.
+MAX_FRAMES_TO_SCAN = int(os.environ.get("TRIPWIRE_VIDEO_MAX_SCAN_FRAMES", "6000"))
 
 
 class VideoTripwire:
@@ -13,6 +28,19 @@ class VideoTripwire:
         self.classifier = classifier or FakeImageClassifier()
 
     def _extract_frames(self, file_path: str, num_frames: int):
+        # NOTE: this deliberately never uses cap.set(CAP_PROP_POS_FRAMES, ...)
+        # or trusts cap.get(CAP_PROP_FRAME_COUNT). Both are unreliable for
+        # "streaming-style" containers that lack a finalized seek index -
+        # notably .webm files produced by the browser's MediaRecorder API
+        # (used by this app's own webcam "Record" video option), which is
+        # written incrementally rather than finalized with a proper Cues/
+        # duration block. On files like that, CAP_PROP_FRAME_COUNT can come
+        # back as 0, negative, or just wrong, and cap.set() silently fails to
+        # seek - every cap.read() afterward returns False, which is exactly
+        # what produced the "no readable frames" error. Reading sequentially
+        # from the start (twice: once to count, once to pull the frames we
+        # actually want) works regardless of container/index quality, at the
+        # cost of decoding the file twice instead of once.
         cap = cv2.VideoCapture(file_path)
         if not cap.isOpened():
             raise ValueError(
@@ -20,27 +48,44 @@ class VideoTripwire:
                 "OpenCV's FFmpeg build - try re-encoding to .mp4."
             )
 
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = cap.get(cv2.CAP_PROP_FPS) or 0
+
+        total_frames = 0
+        while total_frames < MAX_FRAMES_TO_SCAN:
+            ok, _ = cap.read()
+            if not ok:
+                break
+            total_frames += 1
+        cap.release()
+
+        if total_frames == 0:
+            raise ValueError(
+                "Could not read any frames from this video, even sequentially. "
+                "The file may be corrupted, empty, or use a codec unsupported by "
+                "this OpenCV build - try re-encoding to .mp4."
+            )
+
         duration = (total_frames / fps) if fps else None
 
-        if total_frames <= 0:
-            cap.release()
-            raise ValueError("Video reports zero readable frames.")
+        n = min(num_frames, total_frames)
+        target_indices = sorted(set(
+            min(int(total_frames * (i + 1) / (n + 1)), total_frames - 1) for i in range(n)
+        ))
+        target_set = set(target_indices)
 
-        indices = [
-            int(total_frames * (i + 1) / (num_frames + 1)) for i in range(num_frames)
-        ]
-
+        cap2 = cv2.VideoCapture(file_path)
         frames = []
-        for idx in indices:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-            ok, frame_bgr = cap.read()
-            if ok:
+        idx = 0
+        while idx < total_frames:
+            ok, frame_bgr = cap2.read()
+            if not ok:
+                break
+            if idx in target_set:
                 frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
                 frames.append(Image.fromarray(frame_rgb))
+            idx += 1
 
-        cap.release()
+        cap2.release()
         return frames, duration, total_frames
 
     def analyze(self, file_path: str, num_frames: int = DEFAULT_NUM_FRAMES, verbose: bool = True) -> dict:
@@ -74,7 +119,7 @@ class VideoTripwire:
 
         avg_fake = sum(fake_scores) / len(fake_scores)
         max_fake = max(fake_scores)
-        flagged_frame_count = sum(1 for s in fake_scores if s > FAKE_VERDICT_THRESHOLD)
+        flagged_frame_count = sum(1 for s in fake_scores if s > VIDEO_FAKE_VERDICT_THRESHOLD)
         # Index of the single most-suspicious sampled frame, so the frontend
         # can request/display a Grad-CAM heatmap for that frame specifically
         # rather than an arbitrary one.
@@ -82,7 +127,7 @@ class VideoTripwire:
 
         # Verdict on the average across sampled frames rather than any single
         # frame, so one odd frame (motion blur, lighting) doesn't flip the result.
-        is_deepfake = avg_fake > FAKE_VERDICT_THRESHOLD
+        is_deepfake = avg_fake > VIDEO_FAKE_VERDICT_THRESHOLD
         confidence = round(max(avg_fake, 1 - avg_fake) * 100, 1)
 
         if verbose:
@@ -119,7 +164,7 @@ class VideoTripwire:
                 "frames_flagged_fake": f"{flagged_frame_count}/{len(frames)}",
                 "avg_fake_probability": f"{avg_fake:.4f}",
                 "max_fake_probability": f"{max_fake:.4f}",
-                "fake_verdict_threshold": f"{FAKE_VERDICT_THRESHOLD:.2f}",
+                "fake_verdict_threshold": f"{VIDEO_FAKE_VERDICT_THRESHOLD:.2f}",
             },
         }
 
