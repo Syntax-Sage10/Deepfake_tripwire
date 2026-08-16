@@ -6,12 +6,8 @@ MODEL_NAME = "yaya36095/xlm-roberta-text-detector"
 
 MIN_WORDS_FOR_RELIABLE_READING = 25  # short snippets are noisy for this class of model
 
-# Same rationale as FAKE_VERDICT_THRESHOLD in image_classifier.py: this is a
-# small fine-tuned classifier and can run hot on real-world text that wasn't
-# in its training distribution. 0.6 is a starting point, not a measured
-# calibration - override with TRIPWIRE_TEXT_AI_THRESHOLD once you've seen how
-# it scores your own known-human and known-AI samples.
-AI_VERDICT_THRESHOLD = float(os.environ.get("TRIPWIRE_TEXT_AI_THRESHOLD", "0.6"))
+# Raised default threshold to 0.95 to prevent false positives on normal text
+AI_VERDICT_THRESHOLD = float(os.environ.get("TRIPWIRE_TEXT_AI_THRESHOLD", "0.95"))
 
 
 class TextTripwire:
@@ -23,14 +19,14 @@ class TextTripwire:
         self.model.to(self.device)
         self.model.eval()
 
-        id2label = {k: str(v).lower() for k, v in (self.model.config.id2label or {}).items()}
-        human_idx = next((i for i, l in id2label.items() if "human" in l), None)
-        ai_idx = next((i for i, l in id2label.items() if "ai" in l or "machine" in l or "generated" in l), None)
+        id2label = {int(k): str(v).lower() for k, v in (self.model.config.id2label or {}).items()}
+        
+        human_idx = next((k for k, v in id2label.items() if "human" in v or "real" in v), None)
+        ai_idx = next((k for k, v in id2label.items() if "ai" in v or "machine" in v or "fake" in v or "generated" in v), None)
 
         if human_idx is None or ai_idx is None:
-            print(f"[TextTripwire] ⚠ Could not confidently resolve label mapping from "
-                  f"config.id2label={self.model.config.id2label!r}; falling back to "
-                  f"index 0=HUMAN, 1=AI per model card. Verify this against real samples.")
+            print(f"[TextTripwire] ⚠ Could not explicitly resolve id2label={id2label!r}; "
+                  f"defaulting to index 0=HUMAN, 1=AI.")
             human_idx, ai_idx = 0, 1
 
         self.human_idx = human_idx
@@ -62,6 +58,7 @@ class TextTripwire:
 
         prob_human = float(probs[0][self.human_idx].item())
         prob_ai = float(probs[0][self.ai_idx].item())
+        
         is_ai = prob_ai > AI_VERDICT_THRESHOLD
         confidence = round(max(prob_human, prob_ai) * 100, 1)
 
@@ -96,6 +93,39 @@ class TextTripwire:
             },
         }
 
+    def analyze_paragraphs(self, text: str, verbose: bool = True) -> list:
+        if not text or not text.strip():
+            raise ValueError("No text provided to analyze.")
+
+        raw_paragraphs = text.split('\n')
+        paragraphs = [p.strip() for p in raw_paragraphs if len(p.split()) >= MIN_WORDS_FOR_RELIABLE_READING]
+        
+        if not paragraphs:
+            print("No paragraphs found with enough words for a reliable reading.")
+            return []
+
+        results = []
+        for i, paragraph in enumerate(paragraphs):
+            if verbose:
+                print(f"\n" + "-" * 60)
+                print(f" SCANNING PARAGRAPH {i + 1} / {len(paragraphs)}")
+                print("-" * 60)
+                print(f"Snippet: {paragraph[:100]}...") 
+            
+            try:
+                res = self.analyze(paragraph, verbose=verbose)
+                results.append({
+                    "paragraph_index": i + 1,
+                    "text_snippet": paragraph[:50] + "...",
+                    "verdict": res["verdict"],
+                    "confidence": res["confidence_percent"]
+                })
+            except Exception as e:
+                if verbose:
+                    print(f" [!] Skipping paragraph {i + 1}: {e}")
+
+        return results
+
 
 if __name__ == "__main__":
     import sys
@@ -104,6 +134,17 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         sample = " ".join(sys.argv[1:])
     else:
-        sample = input("Paste text to analyze: ")
-    result = detector.analyze(sample)
-    print(result)
+        print("Paste text to analyze (Press Ctrl+D or Ctrl+Z on a new line to submit):")
+        sample = sys.stdin.read()
+        
+    print("\nStarting paragraph-by-paragraph analysis...")
+    paragraph_results = detector.analyze_paragraphs(sample, verbose=True)
+    
+    if paragraph_results:
+        print("\n" + "=" * 60)
+        print(" FINAL PARAGRAPH BREAKDOWN SUMMARY")
+        print("=" * 60)
+        for res in paragraph_results:
+            verdict_label = "🤖 AI" if res["verdict"] == "RED_SPOOF" else "👤 HUMAN"
+            print(f"Paragraph {res['paragraph_index']}: {verdict_label} ({res['confidence']}% confidence)")
+        print("=" * 60 + "\n")
