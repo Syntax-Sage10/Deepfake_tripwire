@@ -2,7 +2,7 @@ import os
 import cv2
 from PIL import Image
 
-from image_classifier import FakeImageClassifier
+from image_classifier import FakeImageClassifier, FAKE_VERDICT_THRESHOLD as IMAGE_FAKE_VERDICT_THRESHOLD
 
 DEFAULT_NUM_FRAMES = 8
 MIN_FRAMES_FOR_CONFIDENCE = 3
@@ -11,11 +11,20 @@ MIN_FRAMES_FOR_CONFIDENCE = 3
 # photos, but video-codec compression artifacts (block boundaries, motion
 # blur, lower bitrate on webcam recordings especially) can look different
 # to the model than a clean photo does - so video frequently needs its own,
-# separately-tuned threshold rather than reusing the image one. 0.65 is a
-# starting point (a bit higher than the image default of 0.6, on the
-# assumption video runs hotter) - override with TRIPWIRE_VIDEO_FAKE_THRESHOLD
-# once you've seen actual avg_fake_probability numbers from your own clips.
-VIDEO_FAKE_VERDICT_THRESHOLD = float(os.environ.get("TRIPWIRE_VIDEO_FAKE_THRESHOLD", "0.65"))
+# separately-tuned threshold rather than reusing the image one outright.
+#
+# History: this was bumped to 0.85 as a band-aid while the underlying image
+# classifier itself (Ateeqq/ai-vs-human-image-detector) was giving inflated
+# "fake" scores on plain real photos. That model has since been swapped for
+# Organika/sdxl-detector, which fixes the actual scoring problem - so 0.85
+# is no longer calibrated for anything real and would let genuine fakes
+# slide underneath it. Reset to a small buffer above the (now-trustworthy)
+# image threshold instead of a disconnected magic number. Override with
+# TRIPWIRE_VIDEO_FAKE_THRESHOLD once you've collected avg_fake_probability
+# numbers from your own known-real clips against the new model.
+VIDEO_FAKE_VERDICT_THRESHOLD = float(
+    os.environ.get("TRIPWIRE_VIDEO_FAKE_THRESHOLD", str(IMAGE_FAKE_VERDICT_THRESHOLD + 0.05))
+)
 
 # Hard cap on frames scanned per pass, so a very long video can't hang the
 # request indefinitely. ~200s at 30fps / ~500s at 12fps. 
