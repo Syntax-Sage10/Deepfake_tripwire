@@ -39,7 +39,6 @@
         *{ box-sizing:border-box; }
         .hidden{ display:none !important; }
 
-        /* Keyboard Accessibility - Focus Rings */
         *:focus-visible {
             outline: 2px solid var(--cyan);
             outline-offset: 3px;
@@ -520,11 +519,10 @@
             letter-spacing:.06em;
             padding:10px 12px;
             cursor:pointer;
-            transition:border-color .2s ease, color .2s ease, background-color 0.2s ease, transform 0.15s ease;
+            transition:border-color .2s ease, color .2s ease, background-color .2s ease, transform 0.15s ease;
         }
         .export-btn:hover{ border-color:var(--cyan); color:var(--cyan); background: var(--cyan-dim); transform: translateY(-1px); }
 
-        /* Confidence Breakdown Meters */
         .breakdown-container {
             margin-top: 14px;
             border-top: 1px solid var(--panel-line);
@@ -552,7 +550,6 @@
         .breakdown-fill.alarm { background: var(--red); }
         .breakdown-val { color: var(--text); font-weight: 500; flex-shrink: 0; }
 
-        /* Shared panel wrapper (Collapsible Details) */
         details.feature-panel {
             margin-top: 14px;
             border-top: 1px solid var(--panel-line);
@@ -584,21 +581,18 @@
             animation: fadeIn 0.3s ease;
         }
 
-        /* Confidence Gauge */
         .gauge-wrap{ display:flex; flex-direction:column; align-items:center; margin:6px 0 4px; }
         .gauge-svg{ width:200px; max-width:70%; height:auto; }
         .gauge-value{ font-family:var(--mono); font-size:26px; font-weight:700; fill:var(--text); }
         #gaugeArc{ transition: stroke-dashoffset 0.9s cubic-bezier(.65,0,.35,1), stroke 0.4s ease; }
         .gauge-label{ font-size:10px; font-weight:700; letter-spacing:.15em; color:var(--text-dim); margin-top:-6px; }
 
-        /* Heatmap */
         .heatmap-stage{ position:relative; width:100%; max-width:420px; margin:0 auto; border:1px solid var(--panel-line); border-radius: 4px; overflow:hidden; }
         .heatmap-img{ display:block; width:100%; height:auto; }
         .heatmap-overlay-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; opacity:0.72; mix-blend-mode:screen; transition:opacity .2s ease; }
         .heatmap-toggle{ display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-dim); margin-top:8px; cursor:pointer; }
         .heatmap-toggle input{ accent-color:var(--cyan); cursor: pointer; }
 
-        /* Multi-face grid */
         .faces-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; }
         .face-card{ border:1px solid var(--panel-line); border-radius: 4px; padding:6px; text-align:center; font-size:10.5px; transition: border-color 0.2s ease, transform 0.2s ease; }
         .face-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
@@ -609,15 +603,12 @@
         .face-card.green .face-verdict{ color:var(--cyan); }
         .face-card .face-box{ color:var(--text-dim); font-size:9.5px; }
 
-        /* Timeline */
         .timeline-svg{ width:100%; height:100px; display:block; }
         .timeline-legend{ display:flex; gap:16px; font-size:10px; font-weight:600; color:var(--text-dim); margin-top:6px; }
         .timeline-legend .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
 
-        /* Spectrogram */
         .spectrogram-canvas{ width:100%; height:auto; background:#05070a; border:1px solid var(--panel-line); border-radius: 4px; display:block; }
 
-        /* Provenance */
         .provenance-list{ list-style:none; margin:0; padding:0; font-size:11.5px; color:var(--text); }
         .provenance-list li{ padding:5px 0; border-top:1px solid var(--panel-line); }
         .provenance-list li:first-child{ border-top:none; }
@@ -628,7 +619,64 @@
             border-radius:6px; padding:8px 10px; margin-bottom:10px;
         }
 
-        /* Share link */
+        /* Batch Results Container & Cards */
+        .batch-result-card {
+            margin-top: 22px;
+            padding: 20px;
+            background: var(--panel);
+            border: 1px solid var(--panel-line);
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .batch-result-card.armed-red { border-color: var(--red); box-shadow: 0 0 30px var(--red-dim); }
+        .batch-result-card.armed-green { border-color: var(--cyan); box-shadow: 0 0 30px var(--cyan-dim); }
+        .batch-filename-header {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--cyan);
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--panel-line);
+            padding-bottom: 6px;
+        }
+
+        /* Batch Live Progress Bar */
+        .batch-progress-box {
+            margin-top: 22px;
+            padding: 16px 20px;
+            background: var(--panel);
+            border: 1px solid var(--panel-line);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .batch-progress-header {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .batch-progress-track {
+            width: 100%;
+            height: 6px;
+            background: var(--panel-line);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .batch-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--amber);
+            border-radius: 3px;
+            box-shadow: 0 0 10px var(--amber-dim);
+            transition: width 0.3s ease;
+        }
+
         #shareLinkBox{ display:flex; gap:8px; margin-top:10px; }
         #shareLinkBox.hidden{ display:none; }
         #shareLinkInput{
@@ -636,7 +684,6 @@
             font-family:var(--mono); font-size:11px; padding:8px 10px; border-radius:4px;
         }
 
-        /* Recording Timer Badge */
         .rec-timer {
             position: absolute;
             top: 10px;
@@ -834,7 +881,6 @@
         }
         .camera-frame video[srcObject]{ display:block; }
 
-        /* Scanner Overlay for Camera Frames */
         .scanner-overlay {
             position: absolute;
             inset: 0;
@@ -888,7 +934,6 @@
 
         #recordStatus{ font-size:11px; font-weight:600; color:var(--text-dim); text-align:center; margin-top:10px; }
 
-        /* Drag & Drop Enhancements */
         .dropzone{
             position: relative;
             border:1px dashed var(--panel-line);
@@ -970,7 +1015,6 @@
         button[type="submit"]:hover{ box-shadow:0 6px 24px var(--cyan-dim); transform: translateY(-2px); }
         button[type="submit"]:active{ transform:scale(.98); box-shadow:0 2px 10px var(--cyan-dim); }
 
-        /* Progressive Skeleton Loader */
         #loading{
             padding:14px 0 4px;
         }
@@ -1052,7 +1096,6 @@
             white-space: pre-wrap;
         }
 
-        /* Sticky Result Summary Pill */
         #stickySummary {
             position: fixed;
             bottom: 24px;
@@ -1071,7 +1114,7 @@
             transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
             opacity: 0;
             box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-            pointer-events: none; /* Prevent clicks when hidden */
+            pointer-events: none;
         }
         #stickySummary.visible {
             transform: translateX(-50%) translateY(0);
@@ -1143,13 +1186,11 @@
             .nav-item.active{ border-left-color:transparent; border-top-color:var(--cyan); }
             .nav-item .label .name{ white-space:normal; }
         }
-
     </style>
 </head>
 <body>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    <!-- Sticky Floating Status Pill -->
     <div id="stickySummary" class="hidden">
         <div id="stickyIndicator" class="sticky-pill-indicator"></div>
         <span id="stickyVerdictText"></span>
@@ -1167,6 +1208,23 @@
             <div id="historyList" class="modal-list"></div>
             <div style="padding: 10px 16px 16px;">
                 <button id="historyClearBtn" type="button" class="hint-btn" style="width:100%; margin:0;">Clear History</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Processing Queue Modal -->
+    <div id="batchModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>BATCH PROCESSING QUEUE</span>
+                <button id="batchCloseBtn" type="button" class="modal-close">✕</button>
+            </div>
+            <div id="batchList" class="modal-list">
+                <p class="hint" style="padding:14px 16px;">No items currently in the batch queue.</p>
+            </div>
+            <div style="padding: 10px 16px 16px; display:flex; gap:8px;">
+                <button id="batchCancelBtn" type="button" class="hint-btn" style="flex:1; margin:0; border-color:var(--red); color:var(--red);">Abort Queue</button>
+                <button id="batchClearBtn" type="button" class="hint-btn" style="flex:1; margin:0;">Clear Finished</button>
             </div>
         </div>
     </div>
@@ -1203,6 +1261,7 @@
             <span class="left"><span class="dot"></span>SYSTEM ARMED</span>
             <span id="clock">00:00:00</span>
             <span id="caseId">CASE #5130</span>
+            <button id="batchQueueBtn" type="button" class="history-btn hidden">📦 QUEUE (<span id="queueCount">0</span>)</button>
             <button id="historyBtn" type="button" class="history-btn">↺ HISTORY</button>
         </div>
 
@@ -1356,7 +1415,6 @@
             <div class="bar-track"><div class="bar-fill" id="uploadProgressFill"></div></div>
         </div>
 
-        <!-- Progressive Skeleton Loader -->
         <div id="loading" class="hidden">
             <div id="loadingStatusText" style="font-size: 11px; color: var(--cyan); letter-spacing: 0.05em; margin-bottom: 12px; font-weight: 600;">> processing...</div>
             <div class="skeleton-block sk-header"></div>
@@ -1365,6 +1423,20 @@
             <div class="skeleton-block sk-line short"></div>
             <div class="skeleton-block sk-line"></div>
         </div>
+
+        <!-- Live Batch Processing Progress Banner -->
+        <div id="batchLiveProgress" class="batch-progress-box hidden">
+            <div class="batch-progress-header">
+                <span id="batchProgressText">Processing batch queue... (0/0)</span>
+                <span id="batchProgressPct">0%</span>
+            </div>
+            <div class="batch-progress-track">
+                <div id="batchProgressFill" class="batch-progress-fill"></div>
+            </div>
+        </div>
+
+        <!-- Container where batch results will be rendered simultaneously once all are validated -->
+        <div id="batchResultsContainer"></div>
 
         <div id="resultBox" class="hidden">
             <h2 id="resultMessage"></h2>
@@ -1378,7 +1450,6 @@
                 <div id="gaugeLabel" class="gauge-label">CONFIDENCE</div>
             </div>
 
-            <!-- Collapsible Sections -->
             <details id="heatmapPanel" class="feature-panel hidden" open>
                 <summary class="breakdown-title">// Visual Heatmap (Grad-CAM, patch resolution)</summary>
                 <div class="feature-panel-content">
@@ -1556,7 +1627,6 @@
     </footer>
 
     <script>
-        // Disable Fullscreen Capability
         if (typeof Element !== 'undefined') {
             if (Element.prototype.requestFullscreen) {
                 Element.prototype.requestFullscreen = function() {
@@ -1578,7 +1648,7 @@
         });
 
         document.addEventListener('webkitfullscreenchange', () => {
-            if (document.webkitFullscreenElement) {
+            if (document.webkitfullscreenElement) {
                 document.webkitExitFullscreen();
             }
         });
@@ -1618,7 +1688,6 @@
             }
         })();
 
-        // Web Audio API SFX Controller
         const sfx = {
             ctx: null,
             humOsc: null,
@@ -1678,7 +1747,6 @@
 
         document.body.addEventListener('click', () => sfx.init(), { once: true });
 
-        // Recording Timers Helper
         let activeTimer = null;
         let timerSeconds = 0;
         function startRecordingTimer(badgeElId, textElId) {
@@ -1833,7 +1901,6 @@
             document.getElementById('caseId').textContent = id;
             currentCase = { id, type, timestamp: Date.now() };
             
-            // Hide sticky summary when starting a new case
             const sticky = document.getElementById('stickySummary');
             sticky.classList.remove('visible');
             
@@ -1885,6 +1952,54 @@
             });
         }
 
+        let activeBatchQueue = [];
+
+        function updateBatchQueueUI() {
+            const btn = document.getElementById('batchQueueBtn');
+            const countSpan = document.getElementById('queueCount');
+            
+            if (activeBatchQueue.length > 0) {
+                btn.classList.remove('hidden');
+                countSpan.textContent = activeBatchQueue.length;
+            } else {
+                btn.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('batchQueueBtn').addEventListener('click', () => {
+            const list = document.getElementById('batchList');
+            if (activeBatchQueue.length === 0) {
+                list.innerHTML = '<p class="hint" style="padding:14px 16px;">No items currently in the batch queue.</p>';
+            } else {
+                list.innerHTML = activeBatchQueue.map((item, idx) => `
+                    <div class="history-item ${item.status === 'error' ? 'red' : item.status === 'complete' ? 'green' : ''}">
+                        <div class="history-item-top">
+                            <span>#${idx + 1} · ${item.filename}</span>
+                            <span>${item.status.toUpperCase()}</span>
+                        </div>
+                        <div class="history-item-time">${item.mode.toUpperCase()} input</div>
+                    </div>
+                `).join('');
+            }
+            document.getElementById('batchModal').classList.remove('hidden');
+        });
+
+        document.getElementById('batchCloseBtn').addEventListener('click', () => {
+            document.getElementById('batchModal').classList.add('hidden');
+        });
+
+        document.getElementById('batchCancelBtn').addEventListener('click', () => {
+            activeBatchQueue = [];
+            updateBatchQueueUI();
+            document.getElementById('batchModal').classList.add('hidden');
+        });
+
+        document.getElementById('batchClearBtn').addEventListener('click', () => {
+            activeBatchQueue = activeBatchQueue.filter(item => item.status === 'pending');
+            updateBatchQueueUI();
+            document.getElementById('batchModal').classList.add('hidden');
+        });
+
         let typingTimeout;
         function typewriteMetrics(text, element) {
             clearTimeout(typingTimeout);
@@ -1904,37 +2019,6 @@
             typeNext();
         }
 
-        function renderBreakdownMeters(rawResult, isFake) {
-            const container = document.getElementById('breakdownMeters');
-            const list = document.getElementById('breakdownList');
-            if (!rawResult || Object.keys(rawResult).length === 0) {
-                container.classList.add('hidden');
-                return;
-            }
-            
-            let html = '';
-            for (const [key, val] of Object.entries(rawResult)) {
-                let numericVal = parseFloat(val);
-                if (isNaN(numericVal)) continue;
-                let pct = Math.min(100, Math.max(5, Math.abs(numericVal)));
-                if (pct <= 1 && numericVal > 0) pct = numericVal * 100;
-                
-                html += `
-                    <div class="breakdown-row">
-                        <span class="breakdown-label" title="${key}">${key}</span>
-                        <div class="breakdown-track"><div class="breakdown-fill ${isFake ? 'alarm' : ''}" style="width: ${pct}%"></div></div>
-                        <span class="breakdown-val">${val}</span>
-                    </div>
-                `;
-            }
-            if (html) {
-                list.innerHTML = html;
-                container.classList.remove('hidden');
-            } else {
-                container.classList.add('hidden');
-            }
-        }
-
         function loadHistoryEntryIntoResult(entry){
             document.getElementById('historyModal').classList.add('hidden');
             document.getElementById('caseId').textContent = entry.id;
@@ -1951,8 +2035,6 @@
                 rawText += `${key}: ${value}\n`;
             }
             typewriteMetrics(rawText, resultRaw);
-            renderBreakdownMeters(entry.raw_result, entry.verdict === 'FAKE');
-            hideAllFeaturePanels();
             renderGauge(entry.confidence, entry.verdict === 'FAKE');
 
             resultBox.className = entry.verdict === 'FAKE' ? 'armed-red' : 'armed-green';
@@ -1978,102 +2060,6 @@
             }
         });
 
-        function triggerDownload(blob, filename){
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-        }
-
-        function exportReportCSV(){
-            if (!lastResult) return;
-            const rows = [
-                ['Case ID', lastResult.id],
-                ['Timestamp', new Date(lastResult.timestamp).toISOString()],
-                ['Input Type', lastResult.type],
-                ['Verdict', lastResult.verdict],
-                ['Confidence %', lastResult.confidence],
-                ['Message', lastResult.message],
-                [],
-                ['Metric', 'Value'],
-                ...Object.entries(lastResult.raw_result || {}),
-            ];
-            const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-            const blob = new Blob([csv], { type: 'text/csv' });
-            triggerDownload(blob, `tripwire_${lastResult.id.replace(/[^a-z0-9]/gi, '_')}.csv`);
-            showToast('CSV report downloaded', 'success');
-        }
-
-        function exportReportPDF(){
-            if (!lastResult) return;
-            if (!window.jspdf) {
-                showToast('PDF library failed to load — try the CSV export instead.', 'error');
-                return;
-            }
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-
-            doc.setFont('courier', 'bold');
-            doc.setFontSize(15);
-            doc.text('TRIPWIRE — Synthetic Media Detection Report', 14, 18);
-
-            doc.setDrawColor(180);
-            doc.line(14, 22, 196, 22);
-
-            let y = 34;
-            const field = (label, value) => { doc.text(`${label}: ${value}`, 14, y); y += 8; };
-
-            doc.setFont('courier', 'normal');
-            doc.setFontSize(11);
-            field('Case ID', lastResult.id);
-            field('Timestamp', new Date(lastResult.timestamp).toLocaleString());
-            field('Input Type', (lastResult.type || '').toUpperCase());
-            field('Verdict', lastResult.verdict);
-            field('Confidence', lastResult.confidence + '%');
-
-            y += 4;
-            doc.setFont('courier', 'bold');
-            doc.text('Mathematical Metrics', 14, y);
-            y += 8;
-
-            doc.setFont('courier', 'normal');
-            doc.setFontSize(10);
-            for (const [key, value] of Object.entries(lastResult.raw_result || {})) {
-                if (y > 280) { doc.addPage(); y = 20; }
-                doc.text(`${key}: ${String(value)}`, 14, y);
-                y += 6;
-            }
-
-            doc.save(`tripwire_${lastResult.id.replace(/[^a-z0-9]/gi, '_')}.pdf`);
-            showToast('PDF report downloaded', 'success');
-        }
-
-        function copyCaseSummary(){
-            if (!lastResult) return;
-            let md = `### TRIPWIRE FORENSIC REPORT [${lastResult.id}]\n`;
-            md += `- **Timestamp**: ${new Date(lastResult.timestamp).toLocaleString()}\n`;
-            md += `- **Input Type**: ${(lastResult.type || '').toUpperCase()}\n`;
-            md += `- **Verdict**: ${lastResult.verdict} (${lastResult.confidence}% Confidence)\n`;
-            md += `- **Status Message**: ${lastResult.message}\n\n`;
-            md += `**Metrics:**\n`;
-            for (const [k, v] of Object.entries(lastResult.raw_result || {})) {
-                md += `- ${k}: ${v}\n`;
-            }
-            navigator.clipboard.writeText(md).then(() => {
-                showToast('Case summary copied to clipboard in Markdown', 'success');
-            }).catch(() => {
-                showToast('Failed to copy to clipboard', 'error');
-            });
-        }
-
-        document.getElementById('exportPdfBtn').addEventListener('click', exportReportPDF);
-        document.getElementById('exportCsvBtn').addEventListener('click', exportReportCSV);
-        document.getElementById('copySummaryBtn').addEventListener('click', copyCaseSummary);
-
         const LOADING_LINES = {
             mic:   "> extracting spectral features...",
             audio: "> decoding audio & mapping spectra...",
@@ -2093,8 +2079,6 @@
             sfx.startHum();
             const loadingStatus = document.getElementById('loadingStatusText');
             loadingStatus.innerText = LOADING_LINES[mode] || "> processing...";
-            
-            // Just rely on CSS animations for skeleton
         }
 
         function stopLoadingAnim(){
@@ -2123,33 +2107,11 @@
             return true;
         }
 
-        // Intersection Observer for Sticky Summary
-        const stickyObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                const sticky = document.getElementById('stickySummary');
-                // Only show if there is an active result and it is out of view
-                if (!entry.isIntersecting && resultBox.className !== 'hidden' && resultBox.className !== '') {
-                    sticky.classList.add('visible');
-                } else {
-                    sticky.classList.remove('visible');
-                }
-            });
-        }, { threshold: 0.1 });
-        stickyObserver.observe(document.getElementById('resultBox'));
-
-        document.getElementById('stickyScrollBtn').addEventListener('click', () => {
-            const rect = resultBox.getBoundingClientRect();
-            const offset = window.scrollY + rect.top - 80; // 80px offset for sticky header
-            window.scrollTo({ top: offset, behavior: 'smooth' });
-        });
-
         function updateStickySummary(isFake, confidence, message) {
             const ind = document.getElementById('stickyIndicator');
             const txt = document.getElementById('stickyVerdictText');
             
             ind.className = 'sticky-pill-indicator ' + (isFake ? 'red' : 'green');
-            
-            let shortMsg = message.split(' - ')[0]; // truncate long msgs if needed
             txt.textContent = `${isFake ? 'AI' : 'HUMAN'} · ${confidence}%`;
             txt.style.color = isFake ? 'var(--red)' : 'var(--cyan)';
         }
@@ -2164,8 +2126,6 @@
                 resultMessage.innerText = "Error Analyzing Input";
                 resultRaw.innerText = data.error || "Unexpected server error.";
                 resultBox.className = "";
-                document.getElementById('breakdownMeters').classList.add('hidden');
-                hideAllFeaturePanels();
                 resultActions.classList.add('hidden');
                 if (window.setWaveState) window.setWaveState('idle', 0.62);
                 updateStickySummary(true, 0, "Error");
@@ -2181,13 +2141,7 @@
             typewriteMetrics(rawText, resultRaw);
 
             const isFake = data.is_deepfake;
-            renderBreakdownMeters(data.raw_result, isFake);
             renderGauge(data.confidence, isFake);
-            renderHeatmapPanel(data);
-            renderFacesPanel(data.faces || data.peak_frame_faces);
-            renderTimelinePanel(data.frame_timeline);
-            renderProvenancePanel(data.provenance);
-            renderSecondOpinionPanel(data);
 
             const verdict = isFake ? 'FAKE' : 'REAL';
             if (isFake) {
@@ -2217,10 +2171,7 @@
             updateStickySummary(isFake, data.confidence, data.message);
         }
 
-        // ---------------------------------------------------------------
-        // Confidence gauge (radial SVG arc, 0-100%)
-        // ---------------------------------------------------------------
-        const GAUGE_ARC_LENGTH = 251.2; // path length of the half-circle above
+        const GAUGE_ARC_LENGTH = 251.2;
         function renderGauge(confidencePct, isFake){
             const wrap = document.getElementById('gaugeWrap');
             if (confidencePct === undefined || confidencePct === null) {
@@ -2237,335 +2188,119 @@
             document.getElementById('gaugeLabel').textContent = isFake ? 'CONFIDENCE — LIKELY AI' : 'CONFIDENCE — LIKELY AUTHENTIC';
         }
 
-        // ---------------------------------------------------------------
-        // Grad-CAM style heatmap overlay
-        // ---------------------------------------------------------------
-        function renderHeatmapPanel(data){
-            const panel = document.getElementById('heatmapPanel');
-            const overlayImg = document.getElementById('heatmapOverlay');
-            const baseImg = document.getElementById('heatmapBase');
-            const basePreview = data.image_preview || data.peak_frame_preview;
+        function renderBatchResultCard(filename, data) {
+            const container = document.getElementById('batchResultsContainer');
+            const card = document.createElement('div');
+            const isFake = data.is_deepfake;
+            card.className = `batch-result-card ${isFake ? 'armed-red' : 'armed-green'}`;
 
-            if (!data.heatmap_overlay && !basePreview) {
-                panel.classList.add('hidden');
-                return;
+            let rawText = "";
+            for (const [key, value] of Object.entries(data.raw_result || {})) {
+                rawText += `${key}: ${value}\n`;
             }
-            panel.classList.remove('hidden');
-            if (basePreview) baseImg.src = basePreview;
-            if (data.heatmap_overlay) {
-                overlayImg.src = data.heatmap_overlay;
-                overlayImg.classList.remove('hidden');
-            } else {
-                overlayImg.classList.add('hidden');
-            }
-        }
-        document.getElementById('heatmapToggle').addEventListener('change', (e) => {
-            document.getElementById('heatmapOverlay').style.display = e.target.checked ? '' : 'none';
-        });
 
-        // ---------------------------------------------------------------
-        // Multi-face detection results
-        // ---------------------------------------------------------------
-        function renderFacesPanel(faceData){
-            const panel = document.getElementById('facesPanel');
-            if (!faceData || !faceData.face_count) {
-                panel.classList.add('hidden');
-                return;
-            }
-            panel.classList.remove('hidden');
-            document.getElementById('faceCount').textContent = faceData.face_count;
-            document.getElementById('facePlural').textContent = faceData.face_count === 1 ? '' : 's';
-
-            const list = document.getElementById('facesList');
-            list.innerHTML = faceData.faces.map(f => `
-                <div class="face-card ${f.verdict === 'RED_SPOOF' ? 'red' : 'green'}">
-                    <div>#${f.index + 1}</div>
-                    <div class="face-verdict">${f.verdict === 'RED_SPOOF' ? 'FAKE' : 'REAL'}</div>
-                    <div>${f.confidence_percent}%</div>
-                    <div class="face-box">${f.box.w}×${f.box.h}px${f.low_resolution_warning ? ' ⚠' : ''}</div>
-                </div>
-            `).join('');
+            card.innerHTML = `
+                <div class="batch-filename-header">📁 FILE: ${filename}</div>
+                <h2 style="font-family:var(--display); font-weight:900; text-transform:uppercase; font-size:22px; margin:0 0 12px; color:${isFake ? 'var(--red)' : 'var(--cyan)'};">${data.message}</h2>
+                <div style="font-family:var(--mono); font-size:11px; line-height:1.7; color:var(--text-dim); background:#0A0D10; border:1px solid var(--panel-line); border-radius:4px; padding:12px; white-space: pre-wrap;">${rawText}</div>
+            `;
+            container.appendChild(card);
         }
 
-        // ---------------------------------------------------------------
-        // Video per-frame timeline graph
-        // ---------------------------------------------------------------
-        function renderTimelinePanel(timeline){
-            const panel = document.getElementById('timelinePanel');
-            if (!timeline || !timeline.fake_scores || timeline.fake_scores.length < 2) {
-                panel.classList.add('hidden');
-                return;
-            }
-            panel.classList.remove('hidden');
-
-            const svg = document.getElementById('timelineSvg');
-            const W = 600, H = 140, padL = 30, padB = 22, padT = 10, padR = 10;
-            const plotW = W - padL - padR, plotH = H - padT - padB;
-            const scores = timeline.fake_scores;
-            const n = scores.length;
-            const xFor = i => padL + (plotW * i / (n - 1));
-            const yFor = s => padT + plotH * (1 - s);
-
-            let svgHtml = '';
-            // threshold line at 0.5
-            svgHtml += `<line x1="${padL}" y1="${yFor(0.5)}" x2="${W-padR}" y2="${yFor(0.5)}" stroke="#6B7680" stroke-dasharray="4,4" stroke-width="1"/>`;
-            svgHtml += `<text x="${W-padR}" y="${yFor(0.5)-4}" text-anchor="end" font-size="9" fill="#6B7680" font-family="monospace">0.5 threshold</text>`;
-
-            let pathD = '';
-            scores.forEach((s, i) => {
-                const x = xFor(i), y = yFor(s);
-                pathD += (i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`);
-            });
-            svgHtml += `<path d="${pathD}" fill="none" stroke="#00E5A0" stroke-width="2"/>`;
-
-            scores.forEach((s, i) => {
-                const x = xFor(i), y = yFor(s);
-                const flagged = s > 0.5;
-                const isPeak = i === timeline.peak_frame_index;
-                const r = isPeak ? 5 : 3.5;
-                svgHtml += `<circle cx="${x}" cy="${y}" r="${r}" fill="${flagged ? '#FF3B3B' : '#00E5A0'}" stroke="${isPeak ? '#fff' : 'none'}" stroke-width="1"/>`;
-            });
-
-            // x-axis frame index labels
-            svgHtml += `<text x="${padL}" y="${H-6}" font-size="9" fill="#6B7680" font-family="monospace">frame 1</text>`;
-            svgHtml += `<text x="${W-padR}" y="${H-6}" text-anchor="end" font-size="9" fill="#6B7680" font-family="monospace">frame ${n}</text>`;
-
-            svg.innerHTML = svgHtml;
-        }
-
-        // ---------------------------------------------------------------
-        // Second opinion (independent signal-based voice analysis)
-        // ---------------------------------------------------------------
-        function renderSecondOpinionPanel(data){
-            const panel = document.getElementById('secondOpinionPanel');
-            const opinion = data.second_opinion;
-            if (!opinion) {
-                panel.classList.add('hidden');
-                return;
-            }
-            panel.classList.remove('hidden');
-
-            const warningEl = document.getElementById('secondOpinionWarning');
-            if (data.ensemble_warning) {
-                warningEl.textContent = '⚠ ' + data.ensemble_warning;
-                warningEl.classList.remove('hidden');
-            } else {
-                warningEl.classList.add('hidden');
-            }
-
-            const verdictLabel = opinion.verdict === 'RED_SPOOF' ? 'AI-generated' : 'Human / authentic';
-            const rows = [
-                `Verdict: ${verdictLabel} (${opinion.confidence_percent}%)`,
-                `Agrees with primary model: ${opinion.agrees_with_primary ? 'Yes' : 'No'}`,
-            ];
-            if (opinion.detected_anomalies && opinion.detected_anomalies.length) {
-                rows.push(`Flagged signal anomalies: ${opinion.detected_anomalies.join(', ')}`);
-            } else {
-                rows.push('Flagged signal anomalies: none');
-            }
-            document.getElementById('secondOpinionList').innerHTML =
-                rows.map(line => `<li>${line}</li>`).join('');
-        }
-
-        // ---------------------------------------------------------------
-        // Metadata / C2PA provenance panel
-        // ---------------------------------------------------------------
-        function renderProvenancePanel(prov){
-            const panel = document.getElementById('provenancePanel');
-            if (!prov || !prov.findings || !prov.findings.length) {
-                panel.classList.add('hidden');
-                return;
-            }
-            panel.classList.remove('hidden');
-            document.getElementById('provenanceList').innerHTML =
-                prov.findings.map(line => `<li>${line}</li>`).join('');
-        }
-
-        function hideAllFeaturePanels(){
-            ['gaugeWrap','heatmapPanel','facesPanel','timelinePanel','provenancePanel','spectrogramPanel','secondOpinionPanel'].forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.classList.add('hidden');
-            });
-        }
-
-        // ---------------------------------------------------------------
-        // Shareable result link
-        // ---------------------------------------------------------------
-        document.getElementById('shareLinkBtn').addEventListener('click', async () => {
-            if (!lastResult) return;
-            const btn = document.getElementById('shareLinkBtn');
-            btn.disabled = true;
-            btn.textContent = '🔗 Creating link…';
-            try {
-                const res = await fetch('/share', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(lastResult),
-                });
-                const data = await res.json();
-                if (!res.ok || data.error) throw new Error(data.error || 'Failed to create link');
-
-                const box = document.getElementById('shareLinkBox');
-                const input = document.getElementById('shareLinkInput');
-                input.value = data.share_url;
-                box.classList.remove('hidden');
-                showToast('Shareable link created', 'success');
-            } catch (e) {
-                showToast('Could not create share link: ' + e.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '🔗 Share Link';
-            }
-        });
-        document.getElementById('shareLinkCopyBtn').addEventListener('click', () => {
-            const input = document.getElementById('shareLinkInput');
-            input.select();
-            navigator.clipboard.writeText(input.value).then(() => {
-                showToast('Link copied to clipboard', 'success');
-            }).catch(() => showToast('Failed to copy link', 'error'));
-        });
-
-        // Batch Queue Runner for Multiple File Uploads
         async function handleBatchFiles(url, files, mode) {
             if (!files || files.length === 0) return;
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if (!validateFileSize(file, mode, file.name)) continue;
-                showToast(`Queue progress: analyzing file ${i+1} of ${files.length} (${file.name})`, 'info', 3000);
-                await sendFileToBackendSync(url, file, file.name, mode);
-            }
-        }
-
-        // ---------------------------------------------------------------
-        // Client-side amplitude waveform renderer
-        // ---------------------------------------------------------------
-        async function drawAudioSpectrogram(blobOrFile) {
-            const panel = document.getElementById('spectrogramPanel');
-            const status = document.getElementById('spectrogramStatus');
-            const canvas = document.getElementById('spectrogramCanvas');
             
-            panel.querySelector('.breakdown-title').textContent = '// Audio Waveform';
-            panel.classList.remove('hidden');
-            status.textContent = '> decoding audio…';
+            const batchContainer = document.getElementById('batchResultsContainer');
+            const liveProgressBox = document.getElementById('batchLiveProgress');
+            const progressText = document.getElementById('batchProgressText');
+            const progressPct = document.getElementById('batchProgressPct');
+            const progressFill = document.getElementById('batchProgressFill');
 
-            try {
-                const arrayBuf = await blobOrFile.arrayBuffer();
-                const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                const ctx = new AudioCtx();
-                const audioBuf = await ctx.decodeAudioData(arrayBuf.slice(0));
-                const samples = audioBuf.getChannelData(0);
-                ctx.close();
+            batchContainer.innerHTML = ''; 
+            resultBox.classList.add('hidden'); 
+            liveProgressBox.classList.remove('hidden');
 
-                const ctx2d = canvas.getContext('2d');
-                const W = canvas.width;
-                const H = canvas.height;
+            activeBatchQueue = Array.from(files).map((file, idx) => ({
+                id: idx,
+                filename: file.name,
+                mode: mode,
+                status: 'pending'
+            }));
+            updateBatchQueueUI();
 
-                // Clear the canvas
-                ctx2d.clearRect(0, 0, W, H);
+            const completedResults = [];
+            const totalFiles = files.length;
 
-                // Configure waveform styling
-                ctx2d.lineWidth = 1;
-                ctx2d.strokeStyle = '#00E5A0'; // Tripwire cyan
-                ctx2d.beginPath();
+            for (let i = 0; i < totalFiles; i++) {
+                const file = files[i];
+                
+                const percent = Math.round((i / totalFiles) * 100);
+                progressText.textContent = `Analyzing file ${i + 1} of ${totalFiles}: ${file.name}`;
+                progressPct.textContent = `${percent}%`;
+                progressFill.style.width = `${percent}%`;
 
-                // Calculate how many audio samples fit into a single pixel width
-                const step = Math.ceil(samples.length / W);
-                const midY = H / 2;
-
-                // Loop through each pixel column
-                for (let x = 0; x < W; x++) {
-                    let min = 1.0;
-                    let max = -1.0;
-                    
-                    // Find the min/max amplitude within this chunk of samples
-                    for (let j = 0; j < step; j++) {
-                        const datum = samples[(x * step) + j];
-                        if (datum < min) min = datum;
-                        if (datum > max) max = datum;
-                    }
-                    
-                    // Draw a vertical line from the min peak to the max peak
-                    ctx2d.moveTo(x, midY + (min * midY * 0.9)); // 0.9 adds slight padding
-                    ctx2d.lineTo(x, midY + (max * midY * 0.9));
+                if (!validateFileSize(file, mode, file.name)) {
+                    activeBatchQueue[i].status = 'error';
+                    updateBatchQueueUI();
+                    continue;
                 }
-                ctx2d.stroke();
-
-                status.textContent = `> ${audioBuf.duration.toFixed(1)}s decoded · waveform rendered`;
-            } catch (e) {
-                console.error('Waveform error:', e);
-                status.textContent = '> could not render waveform for this clip';
-                const ctx2d = canvas.getContext('2d');
-                ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+                
+                try {
+                    const data = await sendFileToBackendPromise(url, file, file.name, mode);
+                    activeBatchQueue[i].status = 'complete';
+                    completedResults.push({ filename: file.name, data: data });
+                } catch (err) {
+                    activeBatchQueue[i].status = 'error';
+                    completedResults.push({ filename: file.name, data: { is_deepfake: true, message: "Error analyzing file", raw_result: { error: err } } });
+                }
+                updateBatchQueueUI();
             }
+
+            progressText.textContent = `Batch complete — rendered ${completedResults.length} result(s).`;
+            progressPct.textContent = `100%`;
+            progressFill.style.width = `100%`;
+
+            setTimeout(() => {
+                liveProgressBox.classList.add('hidden');
+            }, 1200);
+
+            batchContainer.innerHTML = '';
+            completedResults.forEach(res => {
+                renderBatchResultCard(res.filename, res.data);
+            });
+            
+            if (window.setWaveState) window.setWaveState('idle', 0.62);
+            showToast('Batch queue complete — all results displayed below.', 'success');
         }
 
-        function sendFileToBackendSync(url, file, filename, mode) {
-            return new Promise((resolve) => {
-                beginNewCase(mode);
-                resultBox.classList.add('hidden');
-                resultBox.className = 'hidden';
-                document.getElementById('resultActions').classList.add('hidden');
-                loading.classList.add('hidden');
-                uploadProgress.classList.remove('hidden');
-                if (mode === 'audio' || mode === 'mic') {
-                    drawAudioSpectrogram(file);
-                } else {
-                    document.getElementById('spectrogramPanel').classList.add('hidden');
-                }
-                uploadProgressFill.style.width = '0%';
-                uploadProgressText.textContent = `> uploading ${filename} (0%)`;
-                if (window.setWaveState) window.setWaveState('scan', 0.75);
-
-                toggleScanner(mode, true);
-                sfx.startHum();
-
+        function sendFileToBackendPromise(url, file, filename, mode) {
+            return new Promise((resolve, reject) => {
                 const formData = new FormData();
                 formData.append('file', file, filename);
 
                 const xhr = new XMLHttpRequest();
                 xhr.open('POST', url);
 
-                xhr.upload.onprogress = (e) => {
-                    if (!e.lengthComputable) return;
-                    const pct = Math.round((e.loaded / e.total) * 100);
-                    uploadProgressFill.style.width = pct + '%';
-                    uploadProgressText.textContent = pct < 100
-                        ? `> uploading ${filename} (${pct}%)`
-                        : `> upload complete — analyzing ${filename}...`;
-                    if (pct >= 100) {
-                        uploadProgress.classList.add('hidden');
-                        loading.classList.remove('hidden');
-                        startLoadingAnim(mode);
-                    }
-                };
-
                 xhr.onload = () => {
-                    let data = {};
-                    try { data = JSON.parse(xhr.responseText); } catch (e) { data = {}; }
-                    stopLoadingAnim();
-                    if (xhr.status === 200 && !data.error) {
-                        showResult(data, true);
-                    } else {
-                        showResult(data.error ? data : { error: `Unexpected response status ${xhr.status}` }, false);
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        if (xhr.status === 200 && !data.error) {
+                            resolve(data);
+                        } else {
+                            reject(data.error || `Error status ${xhr.status}`);
+                        }
+                    } catch (e) {
+                        reject('Invalid JSON response');
                     }
-                    resolve();
                 };
-
-                xhr.onerror = () => {
-                    stopLoadingAnim();
-                    loading.classList.add('hidden');
-                    uploadProgress.classList.add('hidden');
-                    if (window.setWaveState) window.setWaveState('idle', 0.62);
-                    showToast('Connection error during batch upload.', 'error');
-                    resolve();
-                };
-
+                xhr.onerror = () => reject('Connection error');
                 xhr.send(formData);
             });
         }
 
         async function sendToBackend(url, fetchOptions, mode){
             beginNewCase(mode);
+            document.getElementById('batchResultsContainer').innerHTML = '';
             resultBox.classList.add('hidden');
             resultBox.className = 'hidden';
             document.getElementById('resultActions').classList.add('hidden');
@@ -2599,7 +2334,12 @@
                 showToast("Please select audio file(s) first.", "error");
                 return;
             }
-            handleBatchFiles('/analyze', fileInput.files, 'audio');
+            if (fileInput.files.length === 1) {
+                document.getElementById('batchResultsContainer').innerHTML = '';
+                sendFileToBackendSync('/analyze', fileInput.files[0], fileInput.files[0].name, 'audio');
+            } else {
+                handleBatchFiles('/analyze', fileInput.files, 'audio');
+            }
         });
 
         document.getElementById('videoForm').addEventListener('submit', (e) => {
@@ -2609,7 +2349,12 @@
                 showToast("Please select video file(s) first.", "error");
                 return;
             }
-            handleBatchFiles('/analyze-video', fileInput.files, 'video');
+            if (fileInput.files.length === 1) {
+                document.getElementById('batchResultsContainer').innerHTML = '';
+                sendFileToBackendSync('/analyze-video', fileInput.files[0], fileInput.files[0].name, 'video');
+            } else {
+                handleBatchFiles('/analyze-video', fileInput.files, 'video');
+            }
         });
 
         document.getElementById('imageForm').addEventListener('submit', (e) => {
@@ -2619,8 +2364,70 @@
                 showToast("Please select image file(s) first.", "error");
                 return;
             }
-            handleBatchFiles('/analyze-image', fileInput.files, 'image');
+            if (fileInput.files.length === 1) {
+                document.getElementById('batchResultsContainer').innerHTML = '';
+                sendFileToBackendSync('/analyze-image', fileInput.files[0], fileInput.files[0].name, 'image');
+            } else {
+                handleBatchFiles('/analyze-image', fileInput.files, 'image');
+            }
         });
+
+        function sendFileToBackendSync(url, file, filename, mode) {
+            beginNewCase(mode);
+            document.getElementById('batchResultsContainer').innerHTML = '';
+            resultBox.classList.add('hidden');
+            resultBox.className = 'hidden';
+            document.getElementById('resultActions').classList.add('hidden');
+            loading.classList.add('hidden');
+            uploadProgress.classList.remove('hidden');
+            uploadProgressFill.style.width = '0%';
+            uploadProgressText.textContent = `> uploading ${filename} (0%)`;
+            if (window.setWaveState) window.setWaveState('scan', 0.75);
+
+            toggleScanner(mode, true);
+            sfx.startHum();
+
+            const formData = new FormData();
+            formData.append('file', file, filename);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url);
+
+            xhr.upload.onprogress = (e) => {
+                if (!e.lengthComputable) return;
+                const pct = Math.round((e.loaded / e.total) * 100);
+                uploadProgressFill.style.width = pct + '%';
+                uploadProgressText.textContent = pct < 100
+                    ? `> uploading ${filename} (${pct}%)`
+                    : `> upload complete — analyzing ${filename}...`;
+                if (pct >= 100) {
+                    uploadProgress.classList.add('hidden');
+                    loading.classList.remove('hidden');
+                    startLoadingAnim(mode);
+                }
+            };
+
+            xhr.onload = () => {
+                let data = {};
+                try { data = JSON.parse(xhr.responseText); } catch (e) { data = {}; }
+                stopLoadingAnim();
+                if (xhr.status === 200 && !data.error) {
+                    showResult(data, true);
+                } else {
+                    showResult(data.error ? data : { error: `Unexpected response status ${xhr.status}` }, false);
+                }
+            };
+
+            xhr.onerror = () => {
+                stopLoadingAnim();
+                loading.classList.add('hidden');
+                uploadProgress.classList.add('hidden');
+                if (window.setWaveState) window.setWaveState('idle', 0.62);
+                showToast('Connection error during upload.', 'error');
+            };
+
+            xhr.send(formData);
+        }
 
         const textInput = document.getElementById('textInput');
         const wordCountHint = document.getElementById('wordCountHint');
@@ -2897,13 +2704,11 @@
             });
         });
 
-        // Dropzone JS Enhancements
         function wireDropzone(zoneId, inputId){
             const zone = document.getElementById(zoneId);
             const input = document.getElementById(inputId);
             const defaultMsg = zone.dataset.defaultMsg || 'Drop files here';
             
-            // Create a text node dynamically so we can change it
             let textSpan = zone.querySelector('.dropzone-msg');
             if(!textSpan) {
                 textSpan = document.createElement('span');
