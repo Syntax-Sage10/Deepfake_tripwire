@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tripwire — Synthetic Media Detection</title>
+    <title>Tripwire — Synthetic Media Detection (3D Immersive Edition)</title>
     <meta name="description" content="Tripwire checks whether audio, video, images, or text is human-made or AI-generated using open detection models. Four input types, one verdict.">
     <meta property="og:title" content="Tripwire — Synthetic Media Detection">
     <meta property="og:description" content="Run live mic audio, uploaded audio/video/images, or pasted text through open detection models to flag likely synthetic media.">
@@ -19,6 +19,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Include Three.js for 3D Scroll Animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         :root{
             --bg:#0A0D10;
@@ -53,7 +55,7 @@
             font-family:var(--mono);
         }
 
-        html{ scroll-behavior:smooth; }
+        html{ scroll-behavior:smooth; perspective: 1200px; }
 
         body{
             position:relative;
@@ -91,7 +93,7 @@
             opacity:.5;
         }
 
-        #wavecanvas{
+        #webgl-container{
             position:fixed;
             inset:0;
             width:100%;
@@ -214,6 +216,8 @@
             margin:0 auto;
             padding:64px 0;
             scroll-margin-top:76px;
+            transform-style: preserve-3d;
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
         .wide-section.tight{ padding-top:44px; padding-bottom:44px; }
         .section-eyebrow{
@@ -228,7 +232,7 @@
         }
         .section-lede{ color:var(--text-dim); font-size:13.5px; line-height:1.7; max-width:60ch; margin:0 0 30px; }
 
-        .hero-marketing{ max-width:720px; margin:0 auto; padding-top:56px; padding-bottom:36px; text-align:center; }
+        .hero-marketing{ max-width:720px; margin:0 auto; padding-top:56px; padding-bottom:36px; text-align:center; transform-style: preserve-3d; }
         .hero-marketing h1{
             font-family:var(--display); font-weight:900;
             font-size:clamp(48px,11vw,84px); line-height:.9;
@@ -258,8 +262,12 @@
             gap:1px; background:var(--panel-line); border:1px solid var(--panel-line);
             border-radius: 8px; overflow: hidden;
         }
-        .engine-card{ background:var(--panel); padding:20px; transition: background-color 0.2s ease, transform 0.2s ease; }
-        .engine-card:hover { background: #161c23; z-index: 2; transform: scale(1.01); box-shadow: 0 0 20px rgba(0,0,0,0.4); }
+        .engine-card{
+            background:var(--panel); padding:20px;
+            transform-style: preserve-3d;
+            transition: background-color 0.2s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .engine-card:hover { background: #161c23; z-index: 2; transform: scale(1.02) translateZ(10px); box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
         .engine-card .eng-tag{ font-size:10.5px; color:var(--cyan); letter-spacing:.1em; margin-bottom:10px; font-weight: 700; }
         .engine-card h3{
             font-family:var(--display); font-weight:900; text-transform:uppercase;
@@ -278,6 +286,8 @@
             padding:22px 20px;
             position:relative;
             border-radius: 8px;
+            transform-style: preserve-3d;
+            transition: transform 0.3s ease;
         }
         .notice::before{
             content:"⚠ READ BEFORE YOU TRUST A VERDICT";
@@ -350,7 +360,11 @@
             font-size:10.5px; color:var(--text-dim); letter-spacing:.04em;
         }
 
-        .console{ position:relative; z-index:3; width:100%; max-width:560px; margin:0 auto; scroll-margin-top:76px; }
+        .console{
+            position:relative; z-index:3; width:100%; max-width:560px; margin:0 auto; scroll-margin-top:76px;
+            transform-style: preserve-3d;
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
 
         .statusbar{
             display:flex;
@@ -751,8 +765,6 @@
         }
         .hero p{ color:var(--text-dim); font-size:13.5px; line-height:1.6; max-width:46ch; margin:0; }
 
-        .console{ max-width:680px; }
-
         .workspace{
             display:flex;
             align-items:flex-start;
@@ -905,6 +917,9 @@
             box-shadow: 0 5px 15px rgba(0, 229, 160, 0.5);
             animation: scanSweep 2s linear infinite;
         }
+
+        .btn-icon-wrap{ display:inline-flex; }
+        .btn-icon{ width:14px; height:14px; flex-shrink:0; }
 
         #recordBtn, #videoCameraBtn, #imageCameraBtn{
             position:relative;
@@ -1209,6 +1224,9 @@
 <body>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
+    <!-- 3D WebGL Background Canvas -->
+    <div id="webgl-container"></div>
+
     <div id="stickySummary" class="hidden">
         <div id="stickyIndicator" class="sticky-pill-indicator"></div>
         <span id="stickyVerdictText"></span>
@@ -1247,7 +1265,6 @@
         </div>
     </div>
 
-    <canvas id="wavecanvas"></canvas>
     <div id="reticle"></div>
     <div id="reticle-dot"></div>
 
@@ -1328,7 +1345,7 @@
                         </div>
                         <button id="recordBtn">
                             <span class="ring"></span>
-                            <span id="recordIcon">⏺</span>
+                            <span id="recordIcon" class="btn-icon-wrap" aria-hidden="true"><svg class="btn-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg></span>
                             <span id="recordText">Record</span>
                         </button>
                         <p id="recordStatus" class="hidden">Recording — click to stop.</p>
@@ -1364,7 +1381,7 @@
                         </div>
                         <button id="videoCameraBtn" type="button">
                             <span class="ring"></span>
-                            <span id="videoCameraIcon">⏺</span>
+                            <span id="videoCameraIcon" class="btn-icon-wrap" aria-hidden="true"><svg class="btn-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg></span>
                             <span id="videoCameraText">Start Camera</span>
                         </button>
                         <p id="videoCameraStatus" class="hint hidden">Recording — click to stop and analyze.</p>
@@ -1398,7 +1415,7 @@
                             <span class="camera-placeholder" id="imageCameraPlaceholder">Camera off</span>
                         </div>
                         <button id="imageCameraBtn" type="button">
-                            <span id="imageCameraIcon">⏺</span>
+                            <span id="imageCameraIcon" class="btn-icon-wrap" aria-hidden="true"><svg class="btn-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg></span>
                             <span id="imageCameraText">Start Camera</span>
                         </button>
                         <p class="hint" id="imageCameraHint"></p>
@@ -1580,25 +1597,25 @@
                 <div class="engine-card">
                     <div class="eng-tag">AUDIO</div>
                     <h3>Voice</h3>
-                    <p>Listens to a live recording or an uploaded clip and scores it for the acoustic fingerprints of synthetic speech. Most reliable on clips between 2.5–13 seconds.</p>
+                    <p>Listens to a live recording or an uploaded clip and scores it for the acoustic fingerprints of synthetic speech. Most reliable on clips between 2.5–13 seconds[cite: 1].</p>
                     <div class="eng-model">model: <b>wav2vec2-deepfake-voice-detector</b></div>
                 </div>
                 <div class="engine-card">
                     <div class="eng-tag">VIDEO</div>
                     <h3>Video</h3>
-                    <p>Samples frames evenly across the clip (recorded or uploaded) and checks each one for visual artifacts common to face-generation and face-swap models, then averages the result.</p>
+                    <p>Samples frames evenly across the clip (recorded or uploaded) and checks each one for visual artifacts common to face-generation and face-swap models, then averages the result[cite: 1].</p>
                     <div class="eng-model">model: <b>Deepfake-Detect-Siglip2</b></div>
                 </div>
                 <div class="engine-card">
                     <div class="eng-tag">IMAGE</div>
                     <h3>Image</h3>
-                    <p>Runs a captured or uploaded image through the same visual-artifact model used for video frames, checking for face-generation and face-swap fingerprints.</p>
+                    <p>Runs a captured or uploaded image through the same visual-artifact model used for video frames, checking for face-generation and face-swap fingerprints[cite: 1].</p>
                     <div class="eng-model">model: <b>Deepfake-Detect-Siglip2</b> (shared with Video)</div>
                 </div>
                 <div class="engine-card">
                     <div class="eng-tag">TEXT</div>
                     <h3>Text</h3>
-                    <p>Reads pasted text for the statistical patterns of language-model output. Needs 25+ words to give a reading worth trusting.</p>
+                    <p>Reads pasted text for the statistical patterns of language-model output. Needs 25+ words to give a reading worth trusting[cite: 1].</p>
                     <div class="eng-model">model: <b>xlm-roberta-text-detector</b></div>
                 </div>
             </div>
@@ -1609,10 +1626,10 @@
             <h2 class="section-title">Read This Before You Trust a Verdict</h2>
             <div class="notice">
                 <ul>
-                    <li><b>This is a signal, not proof.</b> Every verdict is a probability from a model, not a confirmed fact — treat it as one input among several, not a final answer.</li>
-                    <li><b>Short or noisy clips are less reliable.</b> Very short audio, low-frame-count video, and sub-25-word text all widen the margin for error — the tool flags this when it happens.</li>
-                    <li><b>False positives happen.</b> Plain, simple, or heavily-edited human writing and audio can occasionally read as synthetic. A single flag is a reason to look closer, not to conclude.</li>
-                    <li><b>Files aren't kept.</b> Uploaded audio and video are deleted from the server immediately after analysis; nothing is stored or reused.</li>
+                    <li><b>This is a signal, not proof.</b> Every verdict is a probability from a model, not a confirmed fact — treat it as one input among several, not a final answer[cite: 1].</li>
+                    <li><b>Short or noisy clips are less reliable.</b> Very short audio, low-frame-count video, and sub-25-word text all widen the margin for error — the tool flags this when it happens[cite: 1].</li>
+                    <li><b>False positives happen.</b> Plain, simple, or heavily-edited human writing and audio can occasionally read as synthetic. A single flag is a reason to look closer, not to conclude[cite: 1].</li>
+                    <li><b>Files aren't kept.</b> Uploaded audio and video are deleted from the server immediately after analysis; nothing is stored or reused[cite: 1].</li>
                 </ul>
             </div>
         </section>
@@ -1623,23 +1640,23 @@
             <div class="faq-list">
                 <details class="faq-item">
                     <summary>What file types can I upload?</summary>
-                    <p>Most common audio formats work for the audio input (wav, mp3, m4a, webm — browser recordings default to webm). The video input accepts standard containers like mp4 and mov; if a file won't open, re-encoding to mp4 usually fixes it. The image input accepts jpg, png, and webp.</p>
+                    <p>Most common audio formats work for the audio input (wav, mp3, m4a, webm — browser recordings default to webm). The video input accepts standard containers like mp4 and mov; if a file won't open, re-encoding to mp4 usually fixes it. The image input accepts jpg, png, and webp[cite: 1].</p>
                 </details>
                 <details class="faq-item">
                     <summary>Why did it flag my own writing as AI-generated?</summary>
-                    <p>Text detectors like this one are the least reliable of the four inputs — they're known to misfire on plain, short, or simply-structured writing regardless of who wrote it. Treat a text flag as a prompt to double-check, not a verdict on its own, especially under 25 words.</p>
+                    <p>Text detectors like this one are the least reliable of the four inputs — they're known to misfire on plain, short, or simply-structured writing regardless of who wrote it. Treat a text flag as a prompt to double-check, not a verdict on its own, especially under 25 words[cite: 1].</p>
                 </details>
                 <details class="faq-item">
                     <summary>Is a "likely AI-generated" result something I can use as proof?</summary>
-                    <p>No. These are probabilistic classifiers, not forensic tools with legal standing. Use a result to decide whether something deserves closer scrutiny — not as evidence on its own.</p>
+                    <p>No. These are probabilistic classifiers, not forensic tools with legal standing. Use a result to decide whether something deserves closer scrutiny — not as evidence on its own[cite: 1].</p>
                 </details>
                 <details class="faq-item">
                     <summary>Does anything get saved or sent elsewhere?</summary>
-                    <p>Uploaded audio and video are written to a temporary file for the length of the analysis and deleted immediately after, whether the analysis succeeds or fails. Text inputs are processed securely in memory.</p>
+                    <p>Uploaded audio and video are written to a temporary file for the length of the analysis and deleted immediately after, whether the analysis succeeds or fails. Text inputs are processed securely in memory[cite: 1].</p>
                 </details>
                 <details class="faq-item">
                     <summary>Which models power each input?</summary>
-                    <p>Voice runs on wav2vec2-deepfake-voice-detector, video and image both run on Deepfake-Detect-Siglip2, and text on an xlm-roberta text-detector — all open models, listed in full in the footer below.</p>
+                    <p>Voice runs on wav2vec2-deepfake-voice-detector, video and image both run on Deepfake-Detect-Siglip2, and text on an xlm-roberta text-detector — all open models, listed in full in the footer below[cite: 1].</p>
                 </details>
             </div>
         </section>
@@ -1674,6 +1691,78 @@
     </footer>
 
     <script>
+        // --- Three.js 3D Interactive Scroll & Particle Field Background ---
+        const container = document.getElementById('webgl-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const geometry = new THREE.BufferGeometry();
+        const count = 1000;
+        const positions = new Float32Array(count * 3);
+
+        for(let i = 0; i < count * 3; i += 3) {
+            positions[i] = (Math.random() - 0.5) * 50;
+            positions[i+1] = (Math.random() - 0.5) * 50;
+            positions[i+2] = (Math.random() - 0.5) * 50;
+        }
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+        const material = new THREE.PointsMaterial({
+            color: 0x00E5A0,
+            size: 0.08,
+            transparent: true,
+            opacity: 0.5
+        });
+        const particleField = new THREE.Points(geometry, material);
+        scene.add(particleField);
+
+        camera.position.z = 20;
+
+        let scrollY = window.scrollY;
+        let targetRotationX = 0;
+        let targetRotationY = 0;
+
+        window.addEventListener('scroll', () => {
+            scrollY = window.scrollY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            targetRotationX = (e.clientY / window.innerHeight - 0.5) * 0.4;
+            targetRotationY = (e.clientX / window.innerWidth - 0.5) * 0.4;
+        });
+
+        const tiltElements = document.querySelectorAll('.console, .engine-card, .notice, .wide-section');
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+
+            particleField.rotation.y += 0.001 + (targetRotationY - particleField.rotation.y) * 0.05;
+            particleField.rotation.x += 0.001 + (targetRotationX - particleField.rotation.x) * 0.05;
+            particleField.position.y = scrollY * 0.003;
+
+            tiltElements.forEach((el) => {
+                const rect = el.getBoundingClientRect();
+                const centerVal = (rect.top + rect.height / 2 - window.innerHeight / 2) / window.innerHeight;
+                const tilt = centerVal * 10;
+                el.style.transform = `perspective(1000px) rotateX(${-tilt}deg) translateZ(${Math.abs(centerVal) * -15}px)`;
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate3D();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- Original Application & Forensic Logic ---
         if (typeof Element !== 'undefined') {
             if (Element.prototype.requestFullscreen) {
                 Element.prototype.requestFullscreen = function() {
@@ -1844,80 +1933,6 @@
         })();
 
         (function(){
-            const canvas = document.getElementById('wavecanvas');
-            const ctx = canvas.getContext('2d');
-            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            let dpr = 1;
-
-            function resize(){
-                dpr = Math.min(window.devicePixelRatio || 1, 2);
-                canvas.width = window.innerWidth * dpr;
-                canvas.height = window.innerHeight * dpr;
-                canvas.style.width = window.innerWidth + 'px';
-                canvas.style.height = window.innerHeight + 'px';
-                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            }
-            window.addEventListener('resize', resize);
-            resize();
-
-            const COLORS = {
-                idle: [0, 224, 200],
-                scan: [255, 176, 32],
-                real: [50, 240, 120],
-                fake: [255, 64, 64]
-            };
-
-            let current = COLORS.idle.slice();
-            let target = COLORS.idle.slice();
-            let targetOpacity = 0.62;
-            let currentOpacity = 0.62;
-
-            window.setWaveState = function(state, opacity){
-                target = (COLORS[state] || COLORS.idle).slice();
-                if (typeof opacity === 'number') targetOpacity = opacity;
-            };
-
-            let t = 0;
-            const layers = [
-                { amp: 48, freq: 0.011, speed: 0.018, alpha: 1.0,  width: 2.6 },
-                { amp: 30, freq: 0.017, speed: -0.013, alpha: 0.65, width: 2.0 },
-                { amp: 18, freq: 0.026, speed: 0.026, alpha: 0.42, width: 1.5 }
-            ];
-
-            function frame(){
-                for (let i = 0; i < 3; i++) current[i] += (target[i] - current[i]) * 0.035;
-                currentOpacity += (targetOpacity - currentOpacity) * 0.05;
-
-                const w = window.innerWidth, h = window.innerHeight;
-                ctx.clearRect(0, 0, w, h);
-
-                const midY = h * 0.48;
-                const [r, g, b] = current.map(Math.round);
-                const strokeBase = `rgb(${r},${g},${b})`;
-
-                layers.forEach(layer => {
-                    ctx.beginPath();
-                    for (let x = 0; x <= w; x += 5){
-                        const y = midY
-                            + Math.sin(x * layer.freq + t * layer.speed) * layer.amp
-                            + Math.sin(x * layer.freq * 0.47 + t * layer.speed * 1.6) * layer.amp * 0.4;
-                        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-                    }
-                    ctx.strokeStyle = `rgba(${r},${g},${b},${(layer.alpha * currentOpacity).toFixed(3)})`;
-                    ctx.lineWidth = layer.width;
-                    ctx.shadowColor = strokeBase;
-                    ctx.shadowBlur = 14;
-                    ctx.stroke();
-                });
-                ctx.shadowBlur = 0;
-
-                if (!reduceMotion) t += 1;
-                requestAnimationFrame(frame);
-            }
-            frame();
-        })();
-
-        (function(){
             const clock = document.getElementById('clock');
             function tick(){
                 const d = new Date();
@@ -1952,8 +1967,6 @@
             const sticky = document.getElementById('stickySummary');
             sticky.classList.remove('visible');
 
-            // Clear any media preview left over from the previous case so a
-            // stale image/video/waveform doesn't linger while this one runs.
             ['videoPreviewPanel', 'heatmapPanel', 'spectrogramPanel'].forEach(pid => {
                 const panel = document.getElementById(pid);
                 if (panel) panel.classList.add('hidden');
@@ -2188,7 +2201,6 @@
                 resultRaw.innerText = data.error || "Unexpected server error.";
                 resultBox.className = "";
                 resultActions.classList.add('hidden');
-                if (window.setWaveState) window.setWaveState('idle', 0.62);
                 updateStickySummary(true, 0, "Error");
                 return;
             }
@@ -2208,11 +2220,9 @@
             if (isFake) {
                 resultBox.className = "armed-red";
                 beamFill.classList.add('alarm');
-                if (window.setWaveState) window.setWaveState('fake', 0.85);
             } else {
                 resultBox.className = "armed-green";
                 beamFill.classList.remove('alarm');
-                if (window.setWaveState) window.setWaveState('real', 0.85);
             }
 
             const entry = {
@@ -2234,8 +2244,6 @@
         }
 
         function renderMediaPreview(mode, data){
-            // --- Image / video peak-frame: show the actual captured frame,
-            // with the Grad-CAM overlay layered on top if the backend sent one.
             if (data.image_preview || data.peak_frame_preview) {
                 const panel = document.getElementById('heatmapPanel');
                 const base = document.getElementById('heatmapBase');
@@ -2251,7 +2259,6 @@
                 panel.classList.remove('hidden');
             }
 
-            // --- Video: a playable copy of the exact clip that was analyzed ---
             if (mode === 'video' && lastAnalyzedBlob) {
                 const panel = document.getElementById('videoPreviewPanel');
                 const player = document.getElementById('videoPreviewPlayer');
@@ -2259,7 +2266,6 @@
                 panel.classList.remove('hidden');
             }
 
-            // --- Audio / mic: waveform + a playable copy of the exact clip analyzed ---
             if ((mode === 'audio' || mode === 'mic') && lastAnalyzedBlob) {
                 const panel = document.getElementById('spectrogramPanel');
                 const audioPlayer = document.getElementById('audioPreviewPlayer');
@@ -2306,7 +2312,7 @@
                 status.textContent = `> ${audioBuffer.duration.toFixed(2)}s · ${audioBuffer.sampleRate} Hz`;
             } catch (err) {
                 console.warn('Waveform draw failed:', err);
-                status.textContent = "> waveform unavailable for this file's format (playback above still works)";
+                status.textContent = "> waveform unavailable for this file's format";
             } finally {
                 if (audioCtx) audioCtx.close();
             }
@@ -2391,7 +2397,6 @@
 
             for (let i = 0; i < totalFiles; i++) {
                 const file = files[i];
-                
                 const percent = Math.round((i / totalFiles) * 100);
                 progressText.textContent = `Analyzing file ${i + 1} of ${totalFiles}: ${file.name}`;
                 progressPct.textContent = `${percent}%`;
@@ -2426,8 +2431,6 @@
             completedResults.forEach(res => {
                 renderBatchResultCard(res.filename, res.data);
             });
-            
-            if (window.setWaveState) window.setWaveState('idle', 0.62);
             showToast('Batch queue complete — all results displayed below.', 'success');
         }
 
@@ -2466,7 +2469,6 @@
             uploadProgress.classList.add('hidden');
             loading.classList.remove('hidden');
             startLoadingAnim(mode);
-            if (window.setWaveState) window.setWaveState('scan', 0.75);
 
             try {
                 const response = await fetch(url, fetchOptions);
@@ -2479,7 +2481,6 @@
             } catch (error) {
                 stopLoadingAnim();
                 loading.classList.add('hidden');
-                if (window.setWaveState) window.setWaveState('idle', 0.62);
                 showToast('Connection error. Is the server running?', 'error');
                 console.error(error);
             }
@@ -2541,7 +2542,6 @@
             uploadProgress.classList.remove('hidden');
             uploadProgressFill.style.width = '0%';
             uploadProgressText.textContent = `> uploading ${filename} (0%)`;
-            if (window.setWaveState) window.setWaveState('scan', 0.75);
 
             toggleScanner(mode, true);
             sfx.startHum();
@@ -2581,7 +2581,6 @@
                 stopLoadingAnim();
                 loading.classList.add('hidden');
                 uploadProgress.classList.add('hidden');
-                if (window.setWaveState) window.setWaveState('idle', 0.62);
                 showToast('Connection error during upload.', 'error');
             };
 
@@ -2692,9 +2691,8 @@
 
                     recordBtn.classList.add('armed');
                     recordText.innerText = "Stop";
-                    recordIcon.innerText = "⏹";
+                    recordIcon.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>';
                     recordStatus.classList.remove('hidden');
-                    if (window.setWaveState) window.setWaveState('scan', 0.75);
 
                 } catch (err) {
                     showToast("Microphone access denied or unavailable.", "error");
@@ -2706,7 +2704,7 @@
 
                 recordBtn.classList.remove('armed');
                 recordText.innerText = "Record";
-                recordIcon.innerText = "⏺";
+                recordIcon.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg>';
                 recordStatus.classList.add('hidden');
             }
         });
@@ -2749,10 +2747,9 @@
                     startRecordingTimer('videoTimerBadge', 'videoTimerText');
 
                     videoCameraBtn.classList.add('armed');
-                    videoCameraIcon.innerText = "⏹";
+                    videoCameraIcon.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>';
                     videoCameraText.innerText = "Stop";
                     videoCameraStatus.classList.remove('hidden');
-                    if (window.setWaveState) window.setWaveState('scan', 0.75);
                 } catch (err) {
                     showToast("Camera access denied or unavailable.", "error");
                     console.error("Camera Error: ", err);
@@ -2761,7 +2758,7 @@
                 videoMediaRecorder.stop();
                 videoIsRecording = false;
                 videoCameraBtn.classList.remove('armed');
-                videoCameraIcon.innerText = "⏺";
+                videoCameraIcon.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg>';
                 videoCameraText.innerText = "Start Camera";
                 videoCameraStatus.classList.add('hidden');
             }
@@ -2786,7 +2783,7 @@
             imageCameraPlaceholder.classList.remove('hidden');
             imageCameraOn = false;
             imageCameraBtn.classList.remove('ready');
-            imageCameraIcon.innerText = "⏺";
+            imageCameraIcon.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg>';
             imageCameraText.innerText = "Start Camera";
             imageCameraHint.innerText = "";
         }
@@ -2799,7 +2796,7 @@
                     imageCameraPlaceholder.classList.add('hidden');
                     imageCameraOn = true;
                     imageCameraBtn.classList.add('ready');
-                    imageCameraIcon.innerText = "📷";
+                    imageCameraIcon.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.2"/></svg>';
                     imageCameraText.innerText = "Capture & Analyze";
                     imageCameraHint.innerText = "Camera is live — click to capture.";
                 } catch (err) {
