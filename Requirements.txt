@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Web server
 flask>=3.0
 werkzeug>=3.0
@@ -21,3 +22,15 @@ soundfile>=0.12
 # Text file uploads (analyze-text-file: .pdf / .docx extraction)
 pypdf>=4.0
 python-docx>=1.1
+=======
+flask==3.0.0
+werkzeug==3.0.1
+torch==2.1.0
+transformers==4.35.0
+librosa==0.10.1
+numpy==1.26.2
+opencv-python==4.8.1.78
+Pillow==10.1.0
+pypdf==3.17.1
+python-docx==1.1.0
+>>>>>>> 775602edd4b9ccad7ff7499ceb9db12c4969a57a
