@@ -89,6 +89,14 @@ def _extract_text_from_file(file_path: str, ext: str) -> str:
     raise ValueError(f"Unsupported file type '{ext}'.")
 
 
+def _describe_error(e: Exception) -> str:
+    """Some exceptions (e.g. audioread.exceptions.NoBackendError) carry no
+    message at all, so str(e) is '' and logs/responses look silently blank.
+    Fall back to the exception type name whenever str(e) has nothing in it."""
+    msg = str(e).strip()
+    return msg if msg else f"{type(e).__name__} (no error message provided)"
+
+
 def _verdict_payload(results, extra: dict = None):
     is_fake = results["verdict"] == "RED_SPOOF"
     confidence = results["confidence_percent"]
@@ -151,8 +159,9 @@ def _handle_file_upload(temp_dir, prefix, default_ext, analyzer_fn):
         results = analyzer_fn(temp_file_path)
         return _verdict_response(results)
     except Exception as e:
-        print(f"\n[!] {prefix} backend error: {str(e)}\n")
-        return jsonify({"error": str(e)}), 500
+        err = _describe_error(e)
+        print(f"\n[!] {prefix} backend error: {type(e).__name__}: {err}\n")
+        return jsonify({"error": err}), 500
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -229,8 +238,9 @@ def analyze_video():
 
         return jsonify(_verdict_payload(results, extra))
     except Exception as e:
-        print(f"\n[!] video backend error: {str(e)}\n")
-        return jsonify({"error": str(e)}), 500
+        err = _describe_error(e)
+        print(f"\n[!] video backend error: {type(e).__name__}: {err}\n")
+        return jsonify({"error": err}), 500
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -268,8 +278,9 @@ def analyze_image():
 
         return jsonify(_verdict_payload(results, extra))
     except Exception as e:
-        print(f"\n[!] image backend error: {str(e)}\n")
-        return jsonify({"error": str(e)}), 500
+        err = _describe_error(e)
+        print(f"\n[!] image backend error: {type(e).__name__}: {err}\n")
+        return jsonify({"error": err}), 500
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -326,8 +337,9 @@ def analyze_text_file():
         }
         return jsonify(_verdict_payload(results, extra))
     except Exception as e:
-        print(f"\n[!] text-file backend error: {str(e)}\n")
-        return jsonify({"error": str(e)}), 500
+        err = _describe_error(e)
+        print(f"\n[!] text-file backend error: {type(e).__name__}: {err}\n")
+        return jsonify({"error": err}), 500
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -363,8 +375,9 @@ def analyze_text():
         results = text_analyzer.analyze(text)
         return _verdict_response(results)
     except Exception as e:
-        print(f"\n[!] Text backend error: {str(e)}\n")
-        return jsonify({"error": str(e)}), 500
+        err = _describe_error(e)
+        print(f"\n[!] Text backend error: {type(e).__name__}: {err}\n")
+        return jsonify({"error": err}), 500
 
 
 APP_URL = "http://127.0.0.1:5000/?source=app"
